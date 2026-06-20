@@ -1,0 +1,384 @@
+{
+  "tree": [
+    {
+      "id": "a0000001-0000-0000-0000-000000000001",
+      "name": "📚 LÍNGUA PORTUGUESA",
+      "weight": 3,
+      "expanded": false,
+      "children": [
+        {
+          "id": "a0000001-0000-0000-0000-000000000101",
+          "name": "Ortografia",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000102",
+          "name": "Fonética",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000103",
+          "name": "Morfologia",
+          "weight": 4,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000104",
+          "name": "Semântica",
+          "weight": 4,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000105",
+          "name": "Sintaxe",
+          "weight": 5,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000106",
+          "name": "Pontuação",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000107",
+          "name": "Regência",
+          "weight": 5,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000108",
+          "name": "Concordância",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000109",
+          "name": "Vozes",
+          "weight": 1,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000110",
+          "name": "Coerência. Coesão",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000111",
+          "name": "Interpretação de Textos",
+          "weight": 4,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000001-0000-0000-0000-000000000112",
+          "name": "Redação Oficial (MRPR)",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "a0000002-0000-0000-0000-000000000002",
+      "name": "🧮 MATEMÁTICA",
+      "weight": 3,
+      "expanded": false,
+      "children": [
+        {
+          "id": "a0000002-0000-0000-0000-000000000201",
+          "name": "Conjuntos",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000002-0000-0000-0000-000000000202",
+          "name": "Proporcionalidade",
+          "weight": 5,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000002-0000-0000-0000-000000000203",
+          "name": "Equações",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000002-0000-0000-0000-000000000204",
+          "name": "Funções e Inequações",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000002-0000-0000-0000-000000000205",
+          "name": "Geometria Plana",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000002-0000-0000-0000-000000000206",
+          "name": "Geometria Espacial",
+          "weight": 1,
+          "expanded": true,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "a0000003-0000-0000-0000-000000000003",
+      "name": "💰 MATEMÁTICA FINANCEIRA",
+      "weight": 3,
+      "expanded": false,
+      "children": [
+        {
+          "id": "a0000003-0000-0000-0000-000000000301",
+          "name": "Juros Simples e Descontos",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "a0000004-0000-0000-0000-000000000004",
+      "name": "🧠 RACIOCÍNIO LÓGICO",
+      "weight": 3,
+      "expanded": false,
+      "children": [
+        {
+          "id": "a0000004-0000-0000-0000-000000000401",
+          "name": "Raciocínio Lógico",
+          "weight": 4,
+          "expanded": true,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "a0000005-0000-0000-0000-000000000005",
+      "name": "⚖️ DIREITO ADMINISTRATIVO (FEDERAL)",
+      "weight": 3,
+      "expanded": false,
+      "children": [
+        {
+          "id": "a0000005-0000-0000-0000-000000000501",
+          "name": "Regime Jurídico Administrativo",
+          "weight": 4,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000005-0000-0000-0000-000000000502",
+          "name": "Atos Administrativos",
+          "weight": 4,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000005-0000-0000-0000-000000000503",
+          "name": "Poderes e Deveres da Administração",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000005-0000-0000-0000-000000000504",
+          "name": "Organização Administrativa",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000005-0000-0000-0000-000000000505",
+          "name": "Responsabilidade Civil do Estado",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000005-0000-0000-0000-000000000506",
+          "name": "Agentes Públicos",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000005-0000-0000-0000-000000000507",
+          "name": "Improbidade Administrativa",
+          "weight": 4,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000005-0000-0000-0000-000000000508",
+          "name": "Licitações e Contratos Administrativos (Lei nº 14.133/2021)",
+          "weight": 5,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000005-0000-0000-0000-000000000509",
+          "name": "Acesso à Informação",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "a0000006-0000-0000-0000-000000000006",
+      "name": "📜 DIREITO CONSTITUCIONAL",
+      "weight": 3,
+      "expanded": false,
+      "children": [
+        {
+          "id": "a0000006-0000-0000-0000-000000000601",
+          "name": "Dos Princípios Fundamentais da Constituição",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000006-0000-0000-0000-000000000602",
+          "name": "Dos Direitos e Garantias Fundamentais",
+          "weight": 5,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000006-0000-0000-0000-000000000603",
+          "name": "Da Organização do Estado",
+          "weight": 4,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000006-0000-0000-0000-000000000604",
+          "name": "Da Organização dos Poderes",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000006-0000-0000-0000-000000000605",
+          "name": "Ordem Social",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "a0000007-0000-0000-0000-000000000007",
+      "name": "🏛️ LEGISLAÇÃO LOCAL (ESTADUAL + MUNICIPAL)",
+      "weight": 3,
+      "expanded": false,
+      "children": [
+        {
+          "id": "a0000007-0000-0000-0000-000000000701",
+          "name": "Legislação Administrativa do Estado do RS",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000007-0000-0000-0000-000000000702",
+          "name": "Constituição do Estado do Rio Grande do Sul",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000007-0000-0000-0000-000000000703",
+          "name": "Estatutos dos Servidores Públicos Municipais",
+          "weight": 5,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000007-0000-0000-0000-000000000704",
+          "name": "Legislação Orgânica e Processo Adm Municipal",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000007-0000-0000-0000-000000000705",
+          "name": "Legislação das Casas Legislativas",
+          "weight": 1,
+          "expanded": true,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "a0000008-0000-0000-0000-000000000008",
+      "name": "📋 PREVIDENCIÁRIO + DIREITOS HUMANOS",
+      "weight": 3,
+      "expanded": false,
+      "children": [
+        {
+          "id": "a0000008-0000-0000-0000-000000000801",
+          "name": "Assistência Social",
+          "weight": 3,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000008-0000-0000-0000-000000000802",
+          "name": "Direito do Idoso",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000008-0000-0000-0000-000000000803",
+          "name": "Direito das Pessoas com Deficiência",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        },
+        {
+          "id": "a0000008-0000-0000-0000-000000000804",
+          "name": "Direitos de Igualdade Racial",
+          "weight": 2,
+          "expanded": true,
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "a0000009-0000-0000-0000-000000000009",
+      "name": "🖋️ ÉTICA NO SERVIÇO PÚBLICO",
+      "weight": 3,
+      "expanded": false,
+      "children": [
+        {
+          "id": "a0000009-0000-0000-0000-000000000901",
+          "name": "Ética no Serviço Público",
+          "weight": 1,
+          "expanded": true,
+          "children": []
+        }
+      ]
+    }
+  ]
+}
