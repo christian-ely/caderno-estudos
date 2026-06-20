@@ -498,6 +498,7 @@ function queueGistSync() {
 
 function salvar(render=true, syncCloud=true) {
     localStorage.setItem(STORE_KEY, JSON.stringify(appData));
+    if (syncCloud) queueGistSync();
     if (!render) return;
     atualizarDashboards();
     const t = router.currentTab;
@@ -506,7 +507,6 @@ function salvar(render=true, syncCloud=true) {
     if (t==='timer') { atualizarSelectTimer(true); setTimerType(document.getElementById('typeSimulado').classList.contains('active')?'simulado':(document.getElementById('typeTheory').classList.contains('active')?'teoria':'exercicio')); }
     if (t==='errors') errorsView.render();
     if (t==='config') gist.updateUI();
-    if (syncCloud) queueGistSync();
 }
 
 // ==================== BRESENHAM ====================
