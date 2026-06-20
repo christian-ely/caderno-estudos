@@ -321,6 +321,14 @@ function loadData() {
     const saved = localStorage.getItem(STORE_KEY);
     let sv = 0;
     if (saved) try { const p = JSON.parse(saved); sv = p.cycleVersion || 0; Object.assign(appData, p); } catch(e) { console.warn(e); }
+    // Token via URL (?token=...)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+    if (urlToken && urlToken.startsWith('ghp_') && !appData.gistToken) {
+        appData.gistToken = urlToken;
+        appData._tokenFromUrl = true;
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
     if (!appData.tree) appData.tree = [];
     if (!appData.questionsLogs) appData.questionsLogs = [];
     if (!appData.studyLogs) appData.studyLogs = [];
@@ -417,6 +425,7 @@ const gist = {
                                 if (cloud.tree?.length > 0 || cloud.errors?.length > 0) {
                                     if (confirm('Dados locais vazios. Restaurar dados da nuvem?')) {
                                         Object.assign(appData, cloud);
+                                        appData.gistLastSync = d.updated_at;
                                         syncSubjectsFromTree(); salvar();
                                         Toast.show('Restaurado da nuvem!','success');
                                         setTimeout(()=>location.reload(), 500);
@@ -469,23 +478,30 @@ const gist = {
             if (!c) { Toast.show('Nenhum dado no gist','error'); return; }
             if (!confirm('Substituir dados locais pelos da nuvem?')) return;
             Object.assign(appData, JSON.parse(c));
-            syncSubjectsFromTree(); salvar();
+            syncSubjectsFromTree(); appData.gistLastSync = d.updated_at; salvar();
             Toast.show('Restaurado!','success');
             setTimeout(()=>location.reload(),500);
         } catch(e) { Toast.show('Erro: '+e.message,'error'); }
     },
     updateUI() {
         const ok = !!appData.gistToken;
+        const viaUrl = ok && appData._tokenFromUrl;
         document.getElementById('gistConnectBtn').classList.toggle('hidden', ok);
-        document.getElementById('gistTokenInput').classList.toggle('hidden', ok);
+        document.getElementById('gistTokenInput').classList.toggle('hidden', ok && !viaUrl);
         document.getElementById('gistDisconnectBtn').classList.toggle('hidden', !ok);
         document.getElementById('gistLoadBtn').classList.toggle('hidden', !ok);
-        document.getElementById('gistConfigStatus').innerHTML = ok ? '✅ Conectado' : '☁️ Desconectado';
+        document.getElementById('gistConfigStatus').innerHTML = ok ? (viaUrl ? '🔗 Conectado via link' : '✅ Conectado') : '☁️ Desconectado';
         document.getElementById('gistIcon').textContent = ok ? '✓' : '☁️';
         const ls = document.getElementById('gistLastSync');
         ls.textContent = appData.gistLastSync ? 'Última: '+new Date(appData.gistLastSync).toLocaleString() : '';
+        if (viaUrl) {
+            document.getElementById('gistTokenField').value = appData.gistToken;
+            document.getElementById('gistTokenField').readOnly = true;
+        } else {
+            document.getElementById('gistTokenField').readOnly = false;
+        }
     },
-    disconnect() { appData.gistToken=''; appData.gistId=''; appData.gistLastSync=null; salvar(); this.updateUI(); Toast.show('Desconectado','info'); }
+    disconnect() { appData.gistToken=''; appData.gistId=''; appData.gistLastSync=null; appData._tokenFromUrl=null; salvar(); this.updateUI(); Toast.show('Desconectado','info'); }
 };
 document.getElementById('gistConnectBtn').onclick = ()=>document.getElementById('gistTokenInput').classList.toggle('hidden');
 document.getElementById('gistDisconnectBtn').onclick = ()=>gist.disconnect();
@@ -1149,6 +1165,33 @@ document.getElementById('inpLink').value = getLastLink();
 loadData();
 rebuildUnifiedQueue();
 router.navigate('dashboard');
+
+if (appData._tokenFromUrl) Toast.show('🔗 Token configurado via link e salvo no navegador!', 'info');
+
+// Auto-pull: check if gist has newer data
+(async function checkCloudUpdates() {
+    if (!appData.gistToken || !appData.gistId) return;
+    try {
+        const r = await fetch('https://api.github.com/gists/'+appData.gistId, {
+            headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}
+        });
+        if (!r.ok) return;
+        const d = await r.json();
+        const gistUpdated = d.updated_at;
+        if (!appData.gistLastSync || new Date(gistUpdated) > new Date(appData.gistLastSync)) {
+            if (confirm('☁️ Dados mais recentes na nuvem ('+new Date(gistUpdated).toLocaleString()+'). Restaurar?')) {
+                const c = d.files['estudos.json']?.content;
+                if (c) {
+                    Object.assign(appData, JSON.parse(c));
+                    appData.gistLastSync = gistUpdated;
+                    syncSubjectsFromTree(); salvar();
+                    Toast.show('Restaurado da nuvem!','success');
+                    setTimeout(()=>location.reload(), 500);
+                }
+            }
+        }
+    } catch(e) { console.warn('Auto-pull:', e); }
+})();
 
 // beforeunload warning
 window.addEventListener('beforeunload', e => { if(timerPomodoro.running){e.preventDefault(); e.returnValue='';} });
