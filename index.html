@@ -26,6 +26,8 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
         .btn-press:active { transform: scale(0.98); }
+        #toast { opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s; }
+        #toast.show { opacity: 1; visibility: visible; }
         .heatmap-grid { display: grid; grid-template-columns: repeat(30, 1fr); gap: 4px; margin-top: 12px; }
         @media (max-width: 480px) { .heatmap-grid { gap: 2px; } }
         .heatmap-cell { aspect-ratio: 1; border-radius: 3px; }
@@ -90,24 +92,12 @@
 <main class="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 pb-24">
 <!-- DASHBOARD -->
 <section id="view-dashboard" class="view-section fade-in space-y-6">
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Blocos hoje</div><div class="text-2xl font-bold" id="statTodayBlocks">0</div></div>
-        <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Horas hoje</div><div class="text-2xl font-bold text-emerald-400" id="statTodayHours">0h</div></div>
-        <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Total semana</div><div class="text-2xl font-bold text-brand-400" id="statWeekHours">0h</div></div>
-        <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Progresso edital</div><div class="text-2xl font-bold text-emerald-400" id="editalProgress">0%</div></div>
-        <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Taxa acerto</div><div class="text-2xl font-bold text-purple-400" id="globalHitRate">0%</div></div>
-    </div>
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Total erros</div><div class="text-2xl font-bold" id="errTotal">0</div></div>
+        <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Total semana</div><div class="text-2xl font-bold text-brand-400" id="statWeekHours">0h</div></div>
         <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Pendentes</div><div class="text-2xl font-bold text-orange-400" id="errPending">0</div></div>
-        <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Dominados</div><div class="text-2xl font-bold text-emerald-400" id="errDominated">0</div></div>
         <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Taxa domínio</div><div class="text-2xl font-bold text-brand-400" id="errRate">0%</div></div>
         <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Acerto revisões</div><div class="text-2xl font-bold text-emerald-400" id="errSuccessRate">0%</div></div>
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Total questões</div><div class="text-2xl font-bold" id="qTotal">0</div></div>
-        <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Acertos</div><div class="text-2xl font-bold text-emerald-400" id="qCorrect">0</div></div>
-        <div class="glass p-4 rounded-2xl"><div class="text-slate-500 text-sm">Taxa acerto</div><div class="text-2xl font-bold text-purple-400" id="qHitRate">0%</div></div>
     </div>
     <div id="abandonedAlert" class="hidden glass p-3 rounded-xl bg-orange-500/20 border-l-4 border-orange-500 text-sm"><i class="ph ph-warning"></i> <span id="abandonedMsg"></span></div>
     <div class="glass p-3 rounded-xl bg-brand-500/10 border-l-4 border-brand-500 text-sm"><i class="ph ph-arrows-clockwise"></i> Revisões pendentes: <span id="nextReviewDisplay">0</span></div>
@@ -236,20 +226,6 @@
 <!-- CONFIG -->
 <section id="view-config" class="view-section hidden fade-in">
     <div class="glass p-6 rounded-2xl full-min-height">
-        <h2 class="text-xl font-bold mb-4"><i class="ph ph-cloud-arrow-up text-brand-400"></i> Sincronia na Nuvem (GitHub Gist)</h2>
-        <p class="text-sm text-slate-400 mb-2">Conecte seu GitHub para salvar na nuvem.</p>
-        <div class="bg-slate-800/30 p-4 rounded-xl mb-4 space-y-2">
-            <div class="flex items-center gap-3"><span id="gistConfigStatus" class="text-sm text-slate-400">☁️ Desconectado</span><span id="gistLastSync" class="text-xs text-slate-500"></span></div>
-            <button id="gistConnectBtn" class="px-4 py-2 bg-brand-500 rounded-lg btn-press text-sm">Conectar ao GitHub</button>
-            <div id="gistTokenInput" class="hidden">
-                <p class="text-xs text-slate-400 mb-1">1. Crie um token em <a href="https://github.com/settings/tokens/new?scopes=gist&description=Caderno%20Estudos" target="_blank" class="text-brand-400 underline">github.com/settings/tokens</a> (apenas escopo <strong>gist</strong>)</p>
-                <p class="text-xs text-slate-400 mb-1">2. Cole o token abaixo:</p>
-                <input type="password" id="gistTokenField" placeholder="ghp_..." class="w-full bg-slate-800 rounded-lg p-2 text-sm mb-2">
-                <div class="flex gap-2"><button onclick="gist.saveToken()" class="px-4 py-2 bg-brand-500 rounded-lg btn-press text-sm">Salvar</button><button onclick="gist.testConnection()" class="px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm">Testar</button></div>
-            </div>
-            <div class="flex gap-2 mt-2"><button id="gistDisconnectBtn" class="hidden px-4 py-2 bg-red-600 rounded-lg btn-press text-sm">Desconectar</button><button id="gistLoadBtn" class="hidden px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm" onclick="gist.loadFromCloud()">Restaurar da nuvem</button></div>
-        </div>
-        <hr class="border-slate-700 my-4">
         <h2 class="text-xl font-bold mb-4"><i class="ph ph-download-simple text-brand-400"></i> Backup e Restauração</h2>
         <div class="flex gap-3 flex-wrap mb-6">
             <button onclick="config.exportData()" class="px-4 py-2 bg-brand-500 rounded-lg btn-press"><i class="ph ph-download-simple"></i> Exportar</button>
@@ -260,6 +236,20 @@
         <h2 class="text-xl font-bold">📝 Notas</h2>
         <textarea id="devNotes" rows="6" class="resize-auto w-full bg-slate-800 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition"></textarea>
         <div class="mt-4 grid grid-cols-2 gap-4"><div><label class="text-sm">Meta horas/dia</label><input type="number" id="dailyGoalHours" value="5" step="0.5" class="w-full bg-slate-800 rounded-lg p-2"></div><div><label class="text-sm">Meta blocos/dia</label><input type="number" id="dailyBlocksGoal" value="4" class="w-full bg-slate-800 rounded-lg p-2"></div></div>
+        <hr class="border-slate-700 my-4">
+        <details class="group">
+            <summary class="text-sm font-medium text-slate-400 cursor-pointer list-none flex items-center gap-2"><i class="ph ph-cloud-arrow-up text-slate-500"></i> Sincronia na Nuvem <span class="text-xs text-slate-600 group-open:hidden">▸</span><span class="text-xs text-slate-600 hidden group-open:inline">▾</span></summary>
+            <div class="mt-3 space-y-2">
+                <div class="flex items-center gap-3"><span id="gistConfigStatus" class="text-sm text-slate-400">☁️ Desconectado</span><span id="gistLastSync" class="text-xs text-slate-500"></span></div>
+                <button id="gistConnectBtn" class="px-4 py-2 bg-brand-500 rounded-lg btn-press text-sm">Conectar</button>
+                <div id="gistTokenInput" class="hidden">
+                    <p class="text-xs text-slate-400 mb-1">Token em <a href="https://github.com/settings/tokens/new?scopes=gist&description=Caderno%20Estudos" target="_blank" class="text-brand-400 underline">github.com/settings/tokens</a> (escopo <strong>gist</strong>)</p>
+                    <input type="password" id="gistTokenField" placeholder="ghp_..." class="w-full bg-slate-800 rounded-lg p-2 text-sm mb-2">
+                    <div class="flex gap-2"><button onclick="gist.saveToken()" class="px-4 py-2 bg-brand-500 rounded-lg btn-press text-sm">Salvar</button><button onclick="gist.testConnection()" class="px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm">Testar</button></div>
+                </div>
+                <div class="flex gap-2"><button id="gistDisconnectBtn" class="hidden px-4 py-2 bg-red-600 rounded-lg btn-press text-sm">Desconectar</button><button id="gistLoadBtn" class="hidden px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm" onclick="gist.loadFromCloud()">Restaurar</button></div>
+            </div>
+        </details>
     </div>
 </section>
 
@@ -280,7 +270,7 @@
 <div id="genericModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4" onclick="closeModal()"><div class="glass bg-slate-900 w-full max-w-md rounded-2xl p-6 relative" onclick="event.stopPropagation()"><button onclick="closeModal()" class="absolute top-3 right-3 text-slate-400 min-w-[44px] min-h-[44px] flex items-center justify-center"><i class="ph ph-x text-xl"></i></button><div id="modalContent"></div></div></div>
 <div id="manageTopicsModal" class="fixed inset-0 z-[85] bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4" onclick="errorsView.closeManageTopics()"><div class="glass bg-slate-900 w-full max-w-md rounded-2xl p-6 border border-slate-700 shadow-2xl relative max-h-[85dvh] overflow-y-auto" onclick="event.stopPropagation()"><button onclick="errorsView.closeManageTopics()" class="absolute top-4 right-4 text-slate-400 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"><i class="ph ph-x text-xl"></i></button><h2 class="text-xl font-bold mb-4"><i class="ph ph-sliders text-brand-400"></i> Gerenciar Assuntos</h2><p class="text-sm text-slate-400 mb-4">Desative assuntos que não fazem parte do seu edital.</p><div id="manageTopicsList" class="space-y-2"></div></div></div>
 <div id="bulkImportModal" class="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4" onclick="event.stopPropagation()"><div class="glass bg-slate-900 w-full max-w-lg rounded-2xl p-6 border border-slate-700 shadow-2xl relative max-h-[85dvh] overflow-y-auto" onclick="event.stopPropagation()"><button onclick="errorsView.closeBulkImport()" class="absolute top-4 right-4 text-slate-400 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"><i class="ph ph-x text-xl"></i></button><h2 class="text-xl font-bold mb-4">Importar Questões</h2><textarea id="bulkJsonInput" rows="6" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm font-mono mb-4"></textarea><label class="flex items-center gap-2 mb-4 cursor-pointer"><input type="checkbox" id="bulkReplaceMode" class="w-4 h-4 accent-brand-500"><span class="text-sm">Substituir existentes</span></label><button onclick="errorsView.importBulk()" class="w-full bg-brand-500 py-3 rounded-xl font-bold btn-press mb-4">Importar</button><button onclick="errorsView.closeBulkImport()" class="w-full bg-slate-700 py-3 rounded-xl btn-press">Cancelar</button><div id="bulkImportResult" class="mt-2 hidden"></div></div></div>
-<div id="toast" class="fixed bottom-6 right-6 z-50 glass px-4 py-3 rounded-xl border-l-4 border-brand-500 shadow-2xl transform translate-y-24 transition-transform duration-300 flex items-center gap-3"><i id="toastIcon" class="ph-fill ph-info text-brand-400 text-xl"></i><span id="toastMsg" class="text-sm font-medium">Mensagem</span></div>
+<div id="toast" class="fixed bottom-20 right-4 z-50 glass px-4 py-3 rounded-xl border-l-4 border-brand-500 shadow-2xl flex items-center gap-3 max-w-[calc(100vw-2rem)]"><i id="toastIcon" class="ph-fill ph-info text-brand-400 text-xl shrink-0"></i><span id="toastMsg" class="text-sm font-medium"></span></div>
 <script>
 // ==================== UTILITÁRIOS ====================
 const parseLocalDate = (d)=>{const [y,m,dd]=d.split('-').map(Number); return new Date(y,m-1,dd);};
@@ -288,7 +278,7 @@ const isDateEqualOrBefore = (d,r)=>parseLocalDate(d).getTime()<=parseLocalDate(r
 const getLocalDateString = ()=>{const d=new Date(); return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');};
 const generateId = ()=>crypto.randomUUID();
 const escapeHtml = s=>{if(!s)return ''; return s.replace(/[&<>]/g,t=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[t]))};
-const Toast = {t:null,show(m,ty='info'){const e=document.getElementById('toast'),i=document.getElementById('toastIcon'),t=document.getElementById('toastMsg'); t.innerText=m; e.classList.remove('translate-y-24'); i.className={success:'ph-fill ph-check-circle text-emerald-400 text-xl',error:'ph-fill ph-warning-circle text-red-400 text-xl',info:'ph-fill ph-info text-brand-400 text-xl'}[ty]; e.style.borderLeftColor={success:'#10b981',error:'#ef4444',info:'#38bdf8'}[ty]; clearTimeout(this.t); this.t=setTimeout(()=>e.classList.add('translate-y-24'),3000);}};
+const Toast = {t:null,show(m,ty='info'){const e=document.getElementById('toast'),i=document.getElementById('toastIcon'),t=document.getElementById('toastMsg'); t.innerText=m; e.classList.add('show'); i.className={success:'ph-fill ph-check-circle text-emerald-400 text-xl',error:'ph-fill ph-warning-circle text-red-400 text-xl',info:'ph-fill ph-info text-brand-400 text-xl'}[ty]; e.style.borderLeftColor={success:'#10b981',error:'#ef4444',info:'#38bdf8'}[ty]; clearTimeout(this.t); this.t=setTimeout(()=>e.classList.remove('show'),3000);}};
 
 // ==================== DADOS ====================
 const STORE_KEY = 'caderno_estudos_v9';
@@ -596,35 +586,18 @@ function advanceCycleForSubjects(ids) { ids.forEach(s=>advanceCycleAfterStudy(s,
 let hoursChart, subjectChart;
 
 function atualizarDashboards() {
-    const hoje = getLocalDateString();
-    const hm = appData.studyLogs.filter(l=>l.date===hoje).reduce((a,b)=>a+b.minutes,0);
-    document.getElementById('statTodayBlocks').innerText = appData.studyLogs.filter(l=>l.date===hoje).length;
-    document.getElementById('statTodayHours').innerText = (hm/60).toFixed(1)+'h';
     const wa = new Date(); wa.setDate(wa.getDate()-7);
     const was = `${wa.getFullYear()}-${String(wa.getMonth()+1).padStart(2,'0')}-${String(wa.getDate()).padStart(2,'0')}`;
     document.getElementById('statWeekHours').innerText = (appData.studyLogs.filter(l=>l.date>=was).reduce((a,b)=>a+b.minutes,0)/60).toFixed(1)+'h';
     const ae = appData.errors.filter(e=>!appData.disabledTopics.includes(e.topic));
-    document.getElementById('errTotal').innerText = ae.length;
     document.getElementById('errPending').innerText = ae.filter(e=>new Date(e.nextReview)<=new Date()&&e.status!=='dominated').length;
     const dom = ae.filter(e=>e.status==='dominated'||(e.efactor>=2.5&&e.interval>30)).length;
-    document.getElementById('errDominated').innerText = dom;
     document.getElementById('errRate').innerText = ae.length ? Math.round(dom/ae.length*100)+'%' : '0%';
     const sr = appData.reviewHistory||[]; const rd = new Date(); rd.setDate(rd.getDate()-30);
     const r30 = sr.filter(r=>new Date(r.date)>rd);
     document.getElementById('errSuccessRate').innerText = (r30.length ? Math.round(r30.filter(r=>r.quality>=2).length/r30.length*100) : 0)+'%';
     const tq = appData.questionsLogs.reduce((a,b)=>a+b.total,0);
-    const cq = appData.questionsLogs.reduce((a,b)=>a+b.correct,0);
     document.getElementById('qTotal').innerText = tq;
-    document.getElementById('qCorrect').innerText = cq;
-    document.getElementById('qHitRate').innerText = tq ? Math.round(cq/tq*100)+'%' : '0%';
-
-    // Edital progress
-    let tl=0, dd=0;
-    const isDom = id => { const s=appData.subjects.find(s=>s.id===id); if (!s) return false; const e=appData.errors.filter(ee=>(ee.subject||'').trim().toLowerCase()===s.name.trim().toLowerCase()); return e.length>0 && e.filter(ee=>ee.status==='dominated'||(ee.efactor>=2.5&&ee.interval>30)).length/e.length >= 0.7; };
-    const cp = n => { if (n.children?.length) n.children.forEach(cp); else { tl++; if (isDom(n.id)) dd++; } };
-    appData.tree.forEach(cp);
-    document.getElementById('editalProgress').innerText = tl ? Math.round(dd/tl*100) : 0;
-    document.getElementById('globalHitRate').innerText = (tq ? Math.round(cq/tq*100) : 0)+'%';
 
     // Abandoned
     const ab = appData.subjects.filter(s => { const ll=[...appData.studyLogs].filter(l=>l.tipo!=='simulado'&&l.subjectId===s.id).sort((a,b)=>b.date.localeCompare(a.date))[0]; return ll && (parseLocalDate(hoje).getTime()-parseLocalDate(ll.date).getTime())/86400000>7; });
