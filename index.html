@@ -588,6 +588,8 @@ function advanceCycleForSubjects(ids) { ids.forEach(s=>advanceCycleAfterStudy(s,
 let hoursChart, subjectChart;
 
 function atualizarDashboards() {
+    const hoje = getLocalDateString();
+    const hm = appData.studyLogs.filter(l=>l.date===hoje).reduce((a,b)=>a+b.minutes,0);
     const wa = new Date(); wa.setDate(wa.getDate()-7);
     const was = `${wa.getFullYear()}-${String(wa.getMonth()+1).padStart(2,'0')}-${String(wa.getDate()).padStart(2,'0')}`;
     document.getElementById('statWeekHours').innerText = (appData.studyLogs.filter(l=>l.date>=was).reduce((a,b)=>a+b.minutes,0)/60).toFixed(1)+'h';
