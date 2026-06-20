@@ -368,7 +368,6 @@ const gist = {
             const r = await fetch('https://api.github.com/gists', {headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}});
             if (!r.ok) { Toast.show('Token inválido','error'); return; }
             Toast.show('Conectado!','success');
-            appData.gistId = '';
             this.updateUI();
             this.syncNow();
         } catch(e) { Toast.show('Erro: '+e.message,'error'); }
@@ -380,7 +379,7 @@ const gist = {
     },
     async _findExistingGist() {
         let page = 1;
-        while (page <= 5) {
+        while (page <= 10) {
             const r = await fetch('https://api.github.com/gists?per_page=100&page='+page, {
                 headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}
             });
@@ -389,7 +388,7 @@ const gist = {
             if (!list.length) return null;
             for (const g of list) {
                 if (g.description === 'Caderno Estudos TOTAL') {
-                    return g.id;
+                    if (g.files && g.files['estudos.json']) return g.id;
                 }
             }
             page++;
@@ -402,7 +401,33 @@ const gist = {
         try {
             if (!appData.gistId) {
                 const found = await this._findExistingGist();
-                if (found) { appData.gistId = found; return this.syncNow(); }
+                if (found) {
+                    appData.gistId = found;
+                    // Check if local data is empty but cloud has data → restore first
+                    const hasLocal = appData.tree.length > 0 || appData.errors.length > 0 || appData.studyLogs.length > 0;
+                    if (!hasLocal) {
+                        const r = await fetch('https://api.github.com/gists/'+found, {
+                            headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}
+                        });
+                        if (r.ok) {
+                            const d = await r.json();
+                            const c = d.files['estudos.json']?.content;
+                            if (c && c.includes('"tree"') && c.includes('[')) {
+                                const cloud = JSON.parse(c);
+                                if (cloud.tree?.length > 0 || cloud.errors?.length > 0) {
+                                    if (confirm('Dados locais vazios. Restaurar dados da nuvem?')) {
+                                        Object.assign(appData, cloud);
+                                        syncSubjectsFromTree(); salvar();
+                                        Toast.show('Restaurado da nuvem!','success');
+                                        setTimeout(()=>location.reload(), 500);
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return this.syncNow();
+                }
             }
             const payload = JSON.stringify(this._sanitizeData(), null, 2);
             if (!appData.gistId) {
