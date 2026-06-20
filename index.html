@@ -49,6 +49,16 @@
         .queue-item:hover { transform: translateX(4px); background: #334155; }
         .mode-active { background: rgba(56,189,248,0.2); color: #38bdf8; }
         @media print { body { background: white; padding: 0; } .glass { background: white !important; color: black !important; border: 1px solid #ccc !important; } .nav-tab, #themeToggle, button { display: none !important; } }
+        /* Tailwind fallback */
+        .flex { display: flex; } .flex-col { flex-direction: column; } .flex-1 { flex: 1 1 0%; } .items-center { align-items: center; } .justify-center { justify-content: center; } .justify-between { justify-content: space-between; } .grid { display: grid; } .gap-1 { gap: 0.25rem; } .gap-2 { gap: 0.5rem; } .gap-3 { gap: 0.75rem; } .gap-4 { gap: 1rem; } .gap-6 { gap: 1.5rem; } .space-y-2 > * + * { margin-top: 0.5rem; } .space-y-4 > * + * { margin-top: 1rem; } .space-y-6 > * + * { margin-top: 1.5rem; } .space-x-2 > * + * { margin-left: 0.5rem; }
+        .w-full { width: 100%; } .max-w-7xl { max-width: 80rem; } .max-w-md { max-width: 28rem; } .max-w-sm { max-width: 24rem; } .h-full { height: 100%; } .min-h-screen { min-height: 100vh; } .p-2 { padding: 0.5rem; } .p-3 { padding: 0.75rem; } .p-4 { padding: 1rem; } .p-6 { padding: 1.5rem; } .p-8 { padding: 2rem; } .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; } .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; } .px-4 { padding-left: 1rem; padding-right: 1rem; } .px-5 { padding-left: 1.25rem; padding-right: 1.25rem; } .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; } .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; } .py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; } .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; } .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; } .py-4 { padding-top: 1rem; padding-bottom: 1rem; } .mb-1 { margin-bottom: 0.25rem; } .mb-2 { margin-bottom: 0.5rem; } .mb-3 { margin-bottom: 0.75rem; } .mb-4 { margin-bottom: 1rem; } .mb-6 { margin-bottom: 1.5rem; } .mb-8 { margin-bottom: 2rem; } .mt-1 { margin-top: 0.25rem; } .mt-2 { margin-top: 0.5rem; } .mt-3 { margin-top: 0.75rem; } .mt-4 { margin-top: 1rem; } .mt-6 { margin-top: 1.5rem; }
+        .text-sm { font-size: 0.875rem; } .text-xs { font-size: 0.75rem; } .text-lg { font-size: 1.125rem; } .text-xl { font-size: 1.25rem; } .text-2xl { font-size: 1.5rem; } .text-7xl { font-size: 4.5rem; } .font-bold { font-weight: 700; } .font-medium { font-weight: 500; } .font-mono { font-family: monospace; } .text-center { text-align: center; } .text-left { text-align: left; } .text-right { text-align: right; } .whitespace-nowrap { white-space: nowrap; } .whitespace-pre-line { white-space: pre-line; } .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rounded { border-radius: 0.25rem; } .rounded-lg { border-radius: 0.5rem; } .rounded-xl { border-radius: 0.75rem; } .rounded-2xl { border-radius: 1rem; } .rounded-full { border-radius: 9999px; } .border { border: 1px solid #334155; } .border-b { border-bottom: 1px solid #334155; } .border-t { border-top: 1px solid #334155; } .border-l-4 { border-left: 4px solid #334155; }
+        .hidden { display: none; } .overflow-x-auto { overflow-x: auto; } .overflow-y-auto { overflow-y: auto; } .sticky { position: sticky; } .fixed { position: fixed; } .absolute { position: absolute; } .relative { position: relative; } .top-0 { top: 0; } .inset-0 { inset: 0; } .z-50 { z-index: 50; }
+        .bg-slate-900 { background: #0f172a; } .bg-slate-800 { background: #1e293b; } .bg-slate-700 { background: #334155; } .bg-slate-50 { background: #f8fafc; } .bg-black\/70 { background: rgba(0,0,0,0.7); } .dark\:bg-dark-bg { background: #0f172a; }
+        .grid-cols-1 { grid-template-columns: repeat(1, 1fr); } .grid-cols-2 { grid-template-columns: repeat(2, 1fr); } .grid-cols-3 { grid-template-columns: repeat(3, 1fr); } .md\:grid-cols-2 { grid-template-columns: repeat(2, 1fr); } .lg\:grid-cols-5 { grid-template-columns: repeat(5, 1fr); }
+        .sm\:grid-cols-2 { grid-template-columns: repeat(2, 1fr); } .sm\:grid-cols-3 { grid-template-columns: repeat(3, 1fr); } .sm\:grid-cols-5 { grid-template-columns: repeat(5, 1fr); }
+        .mx-auto { margin-left: auto; margin-right: auto; }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-dark-bg text-slate-800 dark:text-slate-200 flex flex-col min-h-screen">
@@ -184,7 +194,7 @@
             <div class="p-6 md:p-8 flex-1 flex flex-col">
                 <div class="flex justify-between items-start mb-3">
                     <div><span class="px-2 py-1 rounded bg-brand-500/20 text-brand-400 text-xs font-bold uppercase" id="revSubject">Matéria</span><h3 class="text-lg text-slate-400 mt-1" id="revTopic">Assunto</h3></div>
-                    <div class="flex items-center gap-1"><span class="text-xs text-slate-500 bg-slate-800 px-2 py-1 rounded border border-slate-700" id="revDifficulty">Média</span><button onclick="review.skip()" class="text-slate-500 hover:text-brand-400 p-1.5 rounded-lg hover:bg-slate-700/50 btn-press" title="Pular"><i class="ph ph-skip-forward text-lg"></i></button></div>
+                    <div class="flex items-center gap-1"><span class="text-xs text-slate-500 bg-slate-800 px-2 py-1 rounded border border-slate-700" id="revDifficulty">Média</span><span id="revLastReview" class="text-xs text-slate-500 hidden"></span><button onclick="review.skip()" class="text-slate-500 hover:text-brand-400 p-1.5 rounded-lg hover:bg-slate-700/50 btn-press" title="Pular"><i class="ph ph-skip-forward text-lg"></i></button></div>
                 </div>
                 <div id="revSM2Info" class="flex items-center gap-3 mb-4 px-1 hidden"></div>
                 <div class="flex-1 overflow-y-auto pr-2 mb-6"><p class="text-lg leading-relaxed font-medium text-slate-100 whitespace-pre-line" id="revQuestion">Questão...</p></div>
@@ -251,6 +261,19 @@
     </div>
 </section>
 
+<div id="postSessionModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center">
+    <div class="glass bg-slate-900 w-full max-w-sm rounded-2xl p-6 relative">
+        <h3 class="text-xl font-bold mb-4"><i class="ph ph-check-square text-brand-400"></i> Registrar Questões</h3>
+        <p class="text-sm text-slate-400 mb-4">Quantas questões você fez?</p>
+        <div class="grid grid-cols-3 gap-3 mb-4">
+            <div><label class="text-xs text-slate-400 block mb-1">Total</label><input type="number" id="postTotalQ" min="0" class="w-full bg-slate-800 rounded-lg p-2 text-sm"></div>
+            <div><label class="text-xs text-red-400 block mb-1">Erros</label><input type="number" id="postWrongQ" min="0" class="w-full bg-slate-800 rounded-lg p-2 text-sm"></div>
+            <div><label class="text-xs text-emerald-400 block mb-1">Acertos</label><input type="number" id="postCorrectQ" readonly class="w-full bg-slate-800 rounded-lg p-2 text-sm"></div>
+        </div>
+        <button id="postSessionSave" class="w-full bg-brand-500 py-2 rounded-lg font-bold btn-press">Salvar</button>
+        <button onclick="closePostSession()" class="mt-2 w-full bg-slate-700 py-2 rounded-lg btn-press text-sm">Pular</button>
+    </div>
+</div>
 </main>
 <div id="genericModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center" onclick="closeModal()"><div class="glass bg-slate-900 w-full max-w-md rounded-2xl p-6 relative" onclick="event.stopPropagation()"><button onclick="closeModal()" class="absolute top-3 right-3 text-slate-400"><i class="ph ph-x text-xl"></i></button><div id="modalContent"></div></div></div>
 <div id="manageTopicsModal" class="fixed inset-0 z-[85] bg-black/70 backdrop-blur-sm hidden flex items-center justify-center" onclick="errorsView.closeManageTopics()"><div class="glass bg-slate-900 w-full max-w-md rounded-2xl p-6 border border-slate-700 shadow-2xl relative max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()"><button onclick="errorsView.closeManageTopics()" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="ph ph-x text-xl"></i></button><h2 class="text-xl font-bold mb-4"><i class="ph ph-sliders text-brand-400"></i> Gerenciar Assuntos</h2><p class="text-sm text-slate-400 mb-4">Desative assuntos que não fazem parte do seu edital.</p><div id="manageTopicsList" class="space-y-2"></div></div></div>
@@ -550,12 +573,10 @@ function atualizarDashboards() {
     // Charts
     const d30=[],hd=[],hd2=new Date();
     for (let i=29;i>=0;i--) { const d=new Date(hd2); d.setDate(hd2.getDate()-i); const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; d30.push(d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})); hd.push(appData.studyLogs.filter(l=>l.date===ds).reduce((a,b)=>a+b.minutes,0)/60); }
-    if (hoursChart) hoursChart.destroy();
-    hoursChart = new Chart(document.getElementById('hoursChart'),{type:'bar',data:{labels:d30,datasets:[{label:'Horas',data:hd,backgroundColor:'#38bdf8',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:true,scales:{y:{beginAtZero:true}}}});
+    try { if (hoursChart) hoursChart.destroy(); hoursChart = new Chart(document.getElementById('hoursChart'),{type:'bar',data:{labels:d30,datasets:[{label:'Horas',data:hd,backgroundColor:'#38bdf8',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:true,scales:{y:{beginAtZero:true}}}}); } catch(e) { console.warn('Chart error:',e); }
     const l30=appData.studyLogs.filter(l=>new Date(l.date)>new Date(Date.now()-30*86400000)),mp=new Map();
     l30.forEach(l=>{(l.subjects||[l.subjectId]).forEach(sid=>{const n=getSubjectName(sid); if(n) mp.set(n,(mp.get(n)||0)+l.minutes/((l.subjects||[l.subjectId]).length));})});
-    if (subjectChart) subjectChart.destroy();
-    subjectChart = new Chart(document.getElementById('subjectChart').getContext('2d'),{type:'pie',data:{labels:[...mp.keys()],datasets:[{data:[...mp.values()].map(m=>m/60),backgroundColor:['#38bdf8','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec489a','#06b6d4','#84cc16','#f97316','#a855f7']}]},options:{responsive:true,plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:11}}}}}});
+    try { if (subjectChart) subjectChart.destroy(); subjectChart = new Chart(document.getElementById('subjectChart').getContext('2d'),{type:'pie',data:{labels:[...mp.keys()],datasets:[{data:[...mp.values()].map(m=>m/60),backgroundColor:['#38bdf8','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec489a','#06b6d4','#84cc16','#f97316','#a855f7']}]},options:{responsive:true,plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:11}}}}}}); } catch(e) { console.warn('Chart error:',e); }
 
     renderTheoryPracticeTable();
     renderSubjectQuestionsTable();
