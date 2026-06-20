@@ -378,10 +378,32 @@ const gist = {
         delete d.gistToken; delete d.gistId; delete d.gistLastSync;
         return d;
     },
+    async _findExistingGist() {
+        let page = 1;
+        while (page <= 5) {
+            const r = await fetch('https://api.github.com/gists?per_page=100&page='+page, {
+                headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}
+            });
+            if (!r.ok) return null;
+            const list = await r.json();
+            if (!list.length) return null;
+            for (const g of list) {
+                if (g.description === 'Caderno Estudos TOTAL') {
+                    return g.id;
+                }
+            }
+            page++;
+        }
+        return null;
+    },
     async syncNow() {
         if (!appData.gistToken) return;
         document.getElementById('gistIcon').textContent = '⏳';
         try {
+            if (!appData.gistId) {
+                const found = await this._findExistingGist();
+                if (found) { appData.gistId = found; return this.syncNow(); }
+            }
             const payload = JSON.stringify(this._sanitizeData(), null, 2);
             if (!appData.gistId) {
                 const r = await fetch('https://api.github.com/gists', {
@@ -408,8 +430,13 @@ const gist = {
         } catch(e) { document.getElementById('gistIcon').textContent = '⚠️'; console.error('Gist:',e); }
     },
     async loadFromCloud() {
-        if (!appData.gistToken || !appData.gistId) { Toast.show('Nuvem não configurada','error'); return; }
+        if (!appData.gistToken) { Toast.show('Nuvem não configurada','error'); return; }
         try {
+            if (!appData.gistId) {
+                const found = await this._findExistingGist();
+                if (!found) { Toast.show('Nenhum gist encontrado. Sincronize primeiro.','error'); return; }
+                appData.gistId = found;
+            }
             const r = await fetch('https://api.github.com/gists/'+appData.gistId, {headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}});
             if (!r.ok) throw Error('HTTP '+r.status);
             const d = await r.json();
