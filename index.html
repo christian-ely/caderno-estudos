@@ -373,14 +373,20 @@ const gist = {
             this.syncNow();
         } catch(e) { Toast.show('Erro: '+e.message,'error'); }
     },
+    _sanitizeData() {
+        const d = {...appData};
+        delete d.gistToken; delete d.gistId; delete d.gistLastSync;
+        return d;
+    },
     async syncNow() {
         if (!appData.gistToken) return;
         document.getElementById('gistIcon').textContent = '⏳';
         try {
+            const payload = JSON.stringify(this._sanitizeData(), null, 2);
             if (!appData.gistId) {
                 const r = await fetch('https://api.github.com/gists', {
                     method:'POST', headers:{'Authorization':'token '+appData.gistToken,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
-                    body:JSON.stringify({description:'Caderno Estudos TOTAL',public:false,files:{'estudos.json':{content:JSON.stringify(appData,null,2)}}})
+                    body:JSON.stringify({description:'Caderno Estudos TOTAL',public:false,files:{'estudos.json':{content:payload}}})
                 });
                 if (!r.ok) throw Error('HTTP '+r.status);
                 const d = await r.json();
@@ -391,7 +397,7 @@ const gist = {
             } else {
                 const r = await fetch('https://api.github.com/gists/'+appData.gistId, {
                     method:'PATCH', headers:{'Authorization':'token '+appData.gistToken,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
-                    body:JSON.stringify({files:{'estudos.json':{content:JSON.stringify(appData,null,2)}}})
+                    body:JSON.stringify({files:{'estudos.json':{content:payload}}})
                 });
                 if (r.status===404) { appData.gistId=''; return this.syncNow(); }
                 if (!r.ok) throw Error('HTTP '+r.status);
