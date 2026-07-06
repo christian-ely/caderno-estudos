@@ -251,7 +251,7 @@
                     <input type="password" id="gistTokenField" placeholder="ghp_..." class="w-full bg-slate-800 rounded-lg p-2 text-sm mb-2">
                     <div class="flex gap-2"><button onclick="gist.saveToken()" class="px-4 py-2 bg-brand-500 rounded-lg btn-press text-sm">Salvar</button><button onclick="gist.testConnection()" class="px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm">Testar</button></div>
                 </div>
-                <div class="flex gap-2"><button id="gistDisconnectBtn" class="hidden px-4 py-2 bg-red-600 rounded-lg btn-press text-sm">Desconectar</button><button id="gistLoadBtn" class="hidden px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm" onclick="gist.loadFromCloud()">Restaurar</button></div>
+                <div class="flex gap-2"><button id="gistDisconnectBtn" class="hidden px-4 py-2 bg-red-600 rounded-lg btn-press text-sm">Desconectar</button><button id="gistShareBtn" class="hidden px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm" onclick="gist.copyShareUrl()"><i class="ph ph-share-network"></i> Compartilhar</button><button id="gistLoadBtn" class="hidden px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm" onclick="gist.loadFromCloud()">Restaurar</button></div>
             </div>
         </details>
     </div>
@@ -455,6 +455,7 @@ const gist = {
                 if (!r.ok) throw Error('HTTP '+r.status);
                 appData.gistLastSync = new Date().toISOString();
                 document.getElementById('gistIcon').textContent = '✓';
+                salvar(false);
             }
             this.updateUI();
         } catch(e) { document.getElementById('gistIcon').textContent = '⚠️'; console.error('Gist:',e); }
@@ -485,6 +486,7 @@ const gist = {
         document.getElementById('gistConnectBtn').classList.toggle('hidden', ok);
         document.getElementById('gistTokenInput').classList.toggle('hidden', ok && !viaUrl);
         document.getElementById('gistDisconnectBtn').classList.toggle('hidden', !ok);
+        document.getElementById('gistShareBtn').classList.toggle('hidden', !ok);
         document.getElementById('gistLoadBtn').classList.toggle('hidden', !ok);
         document.getElementById('gistConfigStatus').innerHTML = ok ? (viaUrl ? '🔗 Conectado via link' : '✅ Conectado') : '☁️ Desconectado';
         document.getElementById('gistIcon').textContent = ok ? '✓' : '☁️';
@@ -497,7 +499,17 @@ const gist = {
             document.getElementById('gistTokenField').readOnly = false;
         }
     },
-    disconnect() { appData.gistToken=''; appData.gistId=''; appData.gistLastSync=null; appData._tokenFromUrl=null; salvar(); this.updateUI(); Toast.show('Desconectado','info'); }
+    disconnect() { appData.gistToken=''; appData.gistId=''; appData.gistLastSync=null; appData._tokenFromUrl=null; salvar(); this.updateUI(); Toast.show('Desconectado','info'); },
+    copyShareUrl() {
+        const url = window.location.origin + window.location.pathname + '?token=' + appData.gistToken;
+        navigator.clipboard.writeText(url).then(() => {
+            Toast.show('URL copiada! Compartilhe com quem quiser.','success');
+        }).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+            ta.remove(); Toast.show('URL copiada!','success');
+        });
+    }
 };
 document.getElementById('gistConnectBtn').onclick = ()=>document.getElementById('gistTokenInput').classList.toggle('hidden');
 document.getElementById('gistDisconnectBtn').onclick = ()=>gist.disconnect();
@@ -685,7 +697,7 @@ const tree = {
         const dp=e.length?Math.round(e.filter(ee=>ee.status==='dominated'||(ee.efactor>=2.5&&ee.interval>30)).length/e.length*100):null;
         let pp=null;
         if (!leaf) { let tl=0,td=0; const cr=n=>{if(n.children?.length)n.children.forEach(cr);else{tl++;const s=n.name.trim().toLowerCase();const e=appData.errors.filter(ee=>(ee.subject||'').trim().toLowerCase()===s);if(e.length&&e.filter(ee=>ee.status==='dominated'||(ee.efactor>=2.5&&ee.interval>30)).length/e.length>=0.7)td++;}}; n.children.forEach(cr); pp=tl?Math.round(td/tl*100):0; }
-        return `<div class="mb-2"><div class="flex items-center justify-between p-2 rounded-lg hover:bg-slate-800/30"><div class="flex items-center gap-2 flex-wrap">${!leaf?`<span class="tree-toggle cursor-pointer text-slate-400 hover:text-white" onclick="tree.toggleNode('${n.id}')"><i class="ph ${n.expanded?'ph-caret-down':'ph-caret-right'}"></i></span>`:'<span class="w-5"></span>'}<span class="font-medium">${escapeHtml(n.name)}</span>${!leaf?`<span class="text-xs text-slate-400">(${pp}%)</span>`:(dp!==null?`<span class="text-xs ${dp>=70?'text-emerald-400':'text-slate-400'}">domínio ${dp}%</span>`:'')}${!leaf&&pp!==null?`<div class="progress-bar-tree"><div class="progress-fill-tree" style="width:${pp}%"></div></div>`:''}</div><div class="flex gap-1"><button onclick="tree.showAddChildModal('${n.id}')" class="text-slate-400 hover:text-brand-400 p-1"><i class="ph ph-plus-circle"></i></button><button onclick="tree.editNode('${n.id}')" class="text-slate-400 hover:text-brand-400 p-1"><i class="ph ph-pencil-simple-line"></i></button><button onclick="tree.deleteNode('${n.id}')" class="text-slate-400 hover:text-red-400 p-1"><i class="ph ph-trash"></i></button></div></div>${!leaf&&n.expanded?`<div class="tree-node ml-6 pl-3 border-l">${n.children.map(c=>this.renderNode(c,d+1)).join('')}</div>`:''}</div>`;
+        return `<div class="mb-2"><div class="flex items-center justify-between p-2 rounded-lg hover:bg-slate-800/30"><div class="flex items-center gap-2 flex-wrap">${!leaf?`<span class="tree-toggle cursor-pointer text-slate-400 hover:text-white" onclick="tree.toggleNode('${n.id}')"><i class="ph ${n.expanded?'ph-caret-down':'ph-caret-right'}"></i></span>`:'<span class="w-5"></span>'}<span class="font-medium">${escapeHtml(n.name)}</span><span class="text-xs text-slate-500 ml-1">w${n.weight}</span>${!leaf?`<span class="text-xs text-slate-400">(${pp}%)</span>`:(dp!==null?`<span class="text-xs ${dp>=70?'text-emerald-400':'text-slate-400'}">domínio ${dp}%</span>`:'')}${!leaf&&pp!==null?`<div class="progress-bar-tree"><div class="progress-fill-tree" style="width:${pp}%"></div></div>`:''}</div><div class="flex gap-1"><button onclick="tree.showAddChildModal('${n.id}')" class="text-slate-400 hover:text-brand-400 p-1"><i class="ph ph-plus-circle"></i></button><button onclick="tree.editNode('${n.id}')" class="text-slate-400 hover:text-brand-400 p-1"><i class="ph ph-pencil-simple-line"></i></button><button onclick="tree.deleteNode('${n.id}')" class="text-slate-400 hover:text-red-400 p-1"><i class="ph ph-trash"></i></button></div></div>${!leaf&&n.expanded?`<div class="tree-node ml-6 pl-3 border-l">${n.children.map(c=>this.renderNode(c,d+1)).join('')}</div>`:''}</div>`;
     },
     toggleNode(id) { const f=arr=>{for(let n of arr){if(n.id===id){n.expanded=!n.expanded;return true} if(n.children&&f(n.children))return true}return false}; f(appData.tree); salvar(true,false); this.renderTree(); },
     collapseAll() { const c=arr=>{arr.forEach(n=>{n.expanded=false;if(n.children)c(n.children)})}; c(appData.tree); salvar(true,false); this.renderTree(); },
