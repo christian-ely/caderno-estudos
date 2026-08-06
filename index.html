@@ -286,7 +286,7 @@ const Toast = {t:null,show(m,ty='info'){const e=document.getElementById('toast')
 
 // ==================== DADOS ====================
 const STORE_KEY = 'caderno_estudos_v9';
-let appData = {tree:[],subjects:[],studyLogs:[],questionsLogs:[],errors:[],reviewHistory:[],disabledTopics:[],streak:0,lastStudyDate:null,onlyReviewsMode:false,devNotes:'',dailyGoalHours:5,dailyBlocksGoal:4,reviewDailyGoal:10,reviewGoalMax:10,cycleOrder:[],cycleVersion:1,gistToken:'',gistId:'',gistLastSync:null,appVersion:5};
+let appData = {tree:[],subjects:[],studyLogs:[],questionsLogs:[],errors:[],reviewHistory:[],disabledTopics:[],streak:0,lastStudyDate:null,onlyReviewsMode:false,devNotes:'',dailyGoalHours:5,dailyBlocksGoal:4,reviewDailyGoal:10,reviewGoalMax:10,cycleOrder:[],cycleVersion:1,gistToken:'',gistId:'',gistLastSync:null,appVersion:6};
 
 function migrateLegacy() {
     if (localStorage.getItem(STORE_KEY)) return false;
@@ -534,15 +534,15 @@ function salvar(render=true, syncCloud=true) {
 }
 
 // ==================== BRESENHAM ====================
+const STATUS_FATOR = {'novo':1.6,'revisar':1.4,'estudando':1.0,'dominado':0.3};
 function gerarCicloBresenham() {
     const hoje = getLocalDateString();
     const pr = appData.subjects.map(s => {
         const ll = [...appData.studyLogs].filter(l => l.subjectId===s.id||(l.subjects&&l.subjects.includes(s.id))).sort((a,b)=>b.date.localeCompare(a.date))[0];
         const ds = ll ? Math.max(0,(parseLocalDate(hoje).getTime()-parseLocalDate(ll.date).getTime())/86400000) : 14;
-        const se = appData.errors.filter(e => (e.subject||'').trim().toLowerCase()===s.name.trim().toLowerCase());
-        let te = 0;
-        if (se.length) { const nd = se.filter(e=>e.status!=='dominated'); te = nd.length/se.length; }
-        return {id:s.id, prio:Math.max(1,Math.round((s.weight||3)*(1+ds/7+te*1.5)))};
+        const st = getLeafStatus(s);
+        const fator = STATUS_FATOR[st] !== undefined ? STATUS_FATOR[st] : 1.0;
+        return {id:s.id, status:st, prio:Math.max(1,Math.round((s.weight||3)*fator*(1+ds/7)))};
     });
     const total = pr.reduce((a,b)=>a+b.prio,0);
     if (!total) { appData.cycleOrder=[]; return; }
@@ -554,7 +554,7 @@ function gerarCicloBresenham() {
             const be = i*pr[j].prio - cnt[j]*total;
             if (be>bv) { bv=be; bi=j; }
         }
-        ciclo.push({type:'study',subjectId:pr[bi].id}); cnt[bi]++;
+        ciclo.push({type:'study',subjectId:pr[bi].id,status:pr[bi].status}); cnt[bi]++;
     }
     appData.cycleOrder = ciclo;
 }
@@ -565,8 +565,14 @@ function syncCycleWithSubjects() {
     appData.cycleOrder = appData.cycleOrder.filter(i=>ids.has(i.subjectId));
     const exist = new Set(appData.cycleOrder.map(i=>i.subjectId));
     for (const s of appData.subjects.filter(s=>!exist.has(s.id))) {
-        const p = Math.max(1,Math.round(s.weight||3));
-        for (let i=0;i<p;i++) appData.cycleOrder.splice(Math.min(Math.round((i+1)*appData.cycleOrder.length/(p+1)),appData.cycleOrder.length),0,{type:'study',subjectId:s.id});
+        const st = getLeafStatus(s);
+        const p = Math.max(1,Math.round((s.weight||3)*(STATUS_FATOR[st]!==undefined?STATUS_FATOR[st]:1.0)));
+        const item = {type:'study',subjectId:s.id,status:st};
+        if (st==='novo'||st==='revisar') {
+            for (let i=0;i<p;i++) appData.cycleOrder.unshift(item);
+        } else {
+            for (let i=0;i<p;i++) appData.cycleOrder.splice(Math.min(Math.round((i+1)*appData.cycleOrder.length/(p+1)),appData.cycleOrder.length),0,item);
+        }
     }
     if (!appData.cycleOrder.length) gerarCicloBresenham();
     rebuildUnifiedQueue();
@@ -589,6 +595,48 @@ function findSubjectIdByName(n) {
     return s ? s.id : null;
 }
 
+// ==================== DOMÍNIO ADAPTATIVO ====================
+const DOMINIO_THRESHOLD = 80;
+const CONTATO_TARGET_MIN = 60;
+const CONTATO_HALF_LIFE_DAYS = 30;
+const DOMINO_TETO_ERRO = 0.65;
+
+function contatoMinutos(id) {
+    const hoje = Date.now();
+    let m = 0;
+    appData.studyLogs.forEach(l => {
+        const hit = l.subjectId===id || (l.subjects&&l.subjects.includes(id));
+        if (!hit) return;
+        const dias = Math.max(0,(hoje-parseLocalDate(l.date).getTime())/86400000);
+        m += l.minutes*Math.pow(0.5, dias/CONTATO_HALF_LIFE_DAYS);
+    });
+    return m;
+}
+function performance(s) {
+    let total=0, correct=0;
+    appData.questionsLogs.forEach(q=>{
+        if (q.subjectId===s.id||(q.subjects&&q.subjects.includes(s.id))) { total+=q.total; correct+=q.correct; }
+    });
+    return {hit: total>=5 ? correct/total : null, count:total};
+}
+function calcDominioLeaf(s) {
+    const alvo = (s.weight||3)*CONTATO_TARGET_MIN;
+    const contato = contatoMinutos(s.id);
+    const contPct = Math.min(1, contato/alvo);
+    const perf = performance(s);
+    let dom = perf.hit==null ? contPct : contPct*0.6 + perf.hit*0.4;
+    const pend = appData.errors.filter(e=>e.status!=='dominated'&&(e.status==='pending'||e.status==='reviewing')&&(e.subject||'').trim().toLowerCase()===s.name.trim().toLowerCase()).length;
+    if (pend > 0) dom = Math.min(dom, DOMINO_TETO_ERRO);
+    const pct = Math.round(dom*100);
+    let status;
+    if (contPct < 0.10) status='novo';
+    else if (pct >= DOMINIO_THRESHOLD) status='dominado';
+    else if (pend > 0) status='revisar';
+    else status='estudando';
+    return {pct, status, contPct, contato:Math.round(contato), pctPerf:perf.hit==null?null:Math.round(perf.hit*100), q:perf.count};
+}
+function getLeafStatus(s) { return calcDominioLeaf(s).status; }
+
 function advanceCycleAfterStudy(sid, silent) {
     const idx = appData.cycleOrder.findIndex(i=>i.subjectId===sid);
     if (idx!==-1) appData.cycleOrder.splice(idx,1);
@@ -609,8 +657,8 @@ function atualizarDashboards() {
     document.getElementById('statWeekHours').innerText = (appData.studyLogs.filter(l=>l.date>=was).reduce((a,b)=>a+b.minutes,0)/60).toFixed(1)+'h';
     const ae = appData.errors.filter(e=>!appData.disabledTopics.includes(e.topic));
     document.getElementById('errPending').innerText = ae.filter(e=>new Date(e.nextReview)<=new Date()&&e.status!=='dominated').length;
-    const dom = ae.filter(e=>e.status==='dominated'||(e.efactor>=2.5&&e.interval>30)).length;
-    document.getElementById('errRate').innerText = ae.length ? Math.round(dom/ae.length*100)+'%' : '0%';
+    const dom = appData.subjects.filter(s=>calcDominioLeaf(s).pct>=DOMINIO_THRESHOLD).length;
+    document.getElementById('errRate').innerText = appData.subjects.length ? Math.round(dom/appData.subjects.length*100)+'%' : '0%';
     const sr = appData.reviewHistory||[]; const rd = new Date(); rd.setDate(rd.getDate()-30);
     const r30 = sr.filter(r=>new Date(r.date)>rd);
     document.getElementById('errSuccessRate').innerText = (r30.length ? Math.round(r30.filter(r=>r.quality>=2).length/r30.length*100) : 0)+'%';
@@ -692,12 +740,11 @@ const tree = {
     },
     renderNode(n,d) {
         const leaf=!n.children||!n.children.length;
-        const sn=n.name.trim().toLowerCase();
-        const e=appData.errors.filter(ee=>(ee.subject||'').trim().toLowerCase()===sn);
-        const dp=e.length?Math.round(e.filter(ee=>ee.status==='dominated'||(ee.efactor>=2.5&&ee.interval>30)).length/e.length*100):null;
+        const dom = calcDominioLeaf(n);
+        const ST_BADGE = {'novo':'🆕','revisar':'🔄','estudando':'📖','dominado':'👑'};
         let pp=null;
-        if (!leaf) { let tl=0,td=0; const cr=n=>{if(n.children?.length)n.children.forEach(cr);else{tl++;const s=n.name.trim().toLowerCase();const e=appData.errors.filter(ee=>(ee.subject||'').trim().toLowerCase()===s);if(e.length&&e.filter(ee=>ee.status==='dominated'||(ee.efactor>=2.5&&ee.interval>30)).length/e.length>=0.7)td++;}}; n.children.forEach(cr); pp=tl?Math.round(td/tl*100):0; }
-        return `<div class="mb-2"><div class="flex items-center justify-between p-2 rounded-lg hover:bg-slate-800/30"><div class="flex items-center gap-2 flex-wrap">${!leaf?`<span class="tree-toggle cursor-pointer text-slate-400 hover:text-white" onclick="tree.toggleNode('${n.id}')"><i class="ph ${n.expanded?'ph-caret-down':'ph-caret-right'}"></i></span>`:'<span class="w-5"></span>'}<span class="font-medium">${escapeHtml(n.name)}</span><span class="text-xs text-slate-500 ml-1">w${n.weight}</span>${!leaf?`<span class="text-xs text-slate-400">(${pp}%)</span>`:(dp!==null?`<span class="text-xs ${dp>=70?'text-emerald-400':'text-slate-400'}">domínio ${dp}%</span>`:'')}${!leaf&&pp!==null?`<div class="progress-bar-tree"><div class="progress-fill-tree" style="width:${pp}%"></div></div>`:''}</div><div class="flex gap-1"><button onclick="tree.showAddChildModal('${n.id}')" class="text-slate-400 hover:text-brand-400 p-1"><i class="ph ph-plus-circle"></i></button><button onclick="tree.editNode('${n.id}')" class="text-slate-400 hover:text-brand-400 p-1"><i class="ph ph-pencil-simple-line"></i></button><button onclick="tree.deleteNode('${n.id}')" class="text-slate-400 hover:text-red-400 p-1"><i class="ph ph-trash"></i></button></div></div>${!leaf&&n.expanded?`<div class="tree-node ml-6 pl-3 border-l">${n.children.map(c=>this.renderNode(c,d+1)).join('')}</div>`:''}</div>`;
+        if (!leaf) { let tl=0,td=0; const cr=n=>{if(n.children?.length)n.children.forEach(cr);else{tl++;if(calcDominioLeaf(n).pct>=DOMINIO_THRESHOLD)td++;}}; n.children.forEach(cr); pp=tl?Math.round(td/tl*100):0; }
+        return `<div class="mb-2"><div class="flex items-center justify-between p-2 rounded-lg hover:bg-slate-800/30"><div class="flex items-center gap-2 flex-wrap">${!leaf?`<span class="tree-toggle cursor-pointer text-slate-400 hover:text-white" onclick="tree.toggleNode('${n.id}')"><i class="ph ${n.expanded?'ph-caret-down':'ph-caret-right'}"></i></span>`:'<span class="w-5"></span>'}<span class="font-medium">${escapeHtml(n.name)}</span><span class="text-xs text-slate-500 ml-1">w${n.weight}</span>${!leaf?`<span class="text-xs text-slate-400">(${pp}%)</span>`:`<span class="text-xs font-bold ${dom.pct>=DOMINIO_THRESHOLD?'text-emerald-400':(dom.status==='revisar'?'text-orange-400':(dom.status==='novo'?'text-sky-400':'text-slate-400'))}">${ST_BADGE[dom.status]} ${dom.pct}%</span>`}${!leaf&&pp!==null?`<div class="progress-bar-tree"><div class="progress-fill-tree" style="width:${pp}%"></div></div>`:''}</div><div class="flex gap-1"><button onclick="tree.showAddChildModal('${n.id}')" class="text-slate-400 hover:text-brand-400 p-1"><i class="ph ph-plus-circle"></i></button><button onclick="tree.editNode('${n.id}')" class="text-slate-400 hover:text-brand-400 p-1"><i class="ph ph-pencil-simple-line"></i></button><button onclick="tree.deleteNode('${n.id}')" class="text-slate-400 hover:text-red-400 p-1"><i class="ph ph-trash"></i></button></div></div>${!leaf&&n.expanded?`<div class="tree-node ml-6 pl-3 border-l">${n.children.map(c=>this.renderNode(c,d+1)).join('')}</div>`:''}</div>`;
     },
     toggleNode(id) { const f=arr=>{for(let n of arr){if(n.id===id){n.expanded=!n.expanded;return true} if(n.children&&f(n.children))return true}return false}; f(appData.tree); salvar(true,false); this.renderTree(); },
     collapseAll() { const c=arr=>{arr.forEach(n=>{n.expanded=false;if(n.children)c(n.children)})}; c(appData.tree); salvar(true,false); this.renderTree(); },
@@ -720,7 +767,9 @@ const cycle = {
             const s=appData.subjects.find(x=>x.id===item.subjectId);
             const n=s?s.name:'?';
             const r=item.type==='review';
-            return `<div class="queue-item flex justify-between items-center p-3 bg-slate-800/50 rounded-lg ${r?'border-l-4 border-red-500':'border-l-4 border-brand-500'}" onclick="cycle.handleItemClick(${idx})"><div><span class="font-medium">${idx+1}. ${r?'🔄':'📘'} ${escapeHtml(n)}</span><div class="text-xs text-slate-400">${r?'Revisão pendente':'Bloco de estudo'}</div></div>${r?`<span class="text-xs text-red-300">${item.dueDate||''}</span>`:'<span class="text-xs text-slate-400">⏱️ 50-90 min</span>'}</div>`;
+            const badge = r ? '' : ({'novo':'🆕','revisar':'🔄','estudando':'📖','dominado':'👑'})[item.status || (s?getLeafStatus(s):'')];
+            const blockLabel = n + (badge?(' '+badge):'');
+            return `<div class="queue-item flex justify-between items-center p-3 bg-slate-800/50 rounded-lg ${r?'border-l-4 border-red-500':'border-l-4 border-brand-500'}" onclick="cycle.handleItemClick(${idx})"><div><span class="font-medium">${idx+1}. ${r?'🔄':'📘'} ${escapeHtml(blockLabel)}</span><div class="text-xs text-slate-400">${r?'Revisão pendente':'Bloco de estudo'}</div></div>${r?`<span class="text-xs text-red-300">${item.dueDate||''}</span>`:'<span class="text-xs text-slate-400">⏱️ 50-90 min</span>'}</div>`;
         }).join('');
         document.getElementById('onlyReviewsBtn').innerHTML = appData.onlyReviewsMode?'📌 Só revisões':'📌 Modo: Normal';
     },
