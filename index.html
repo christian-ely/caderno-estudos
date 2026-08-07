@@ -402,7 +402,20 @@ function mergeTree(a,b){
     return [...map.values()];
 }
 
-let gistBusy=false, gistQueue=false;
+let gistBusy=false, gistQueue=false, gistNextAttempt=0;
+
+async function _readApiError(r){
+    let msg='';
+    try{ const j=await r.json(); msg=j.message||''; }catch(e){}
+    const rem=r.headers?.get?.('X-RateLimit-Remaining');
+    const retry=r.headers?.get?.('Retry-After');
+    if((r.status===403||r.status===429)&&(/rate/i.test(msg))){
+        const wait=retry? +retry*1000 : (rem==='0'? 15*60*1000 : 0);
+        if(wait) gistNextAttempt=Date.now()+wait;
+        msg+=(wait? ' — tentarei novamente em ~'+Math.round(wait/60000)+'min':'');
+    }
+    return {status:r.status, msg, rem, retry};
+}
 
 const gist = {
     saveToken() {
@@ -414,8 +427,8 @@ const gist = {
         if(!appData.gistToken){Toast.show('Configure o token','error');return;}
         try{
             const r=await fetch('https://api.github.com/gists',{headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github+json'}});
-            if(!r.ok){Toast.show('Token inválido','error');return;}
-            Toast.show('Conectado!','success'); this.updateUI(); this.syncNow(false);
+            if(!r.ok){ const e=await _readApiError(r); Toast.show('Token inválido: HTTP '+e.status+(e.msg?' — '+e.msg:''),'error'); return; }
+            gistNextAttempt=0; Toast.show('Conectado!','success'); this.updateUI(); this.syncNow(false);
         }catch(e){ Toast.show('Erro: '+e.message,'error'); }
     },
     _buildPayload() {
@@ -427,7 +440,7 @@ const gist = {
         let page=1;
         while(page<=10){
             const r=await fetch('https://api.github.com/gists?per_page=100&page='+page,{headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github+json'}});
-            if(!r.ok) return null;
+            if(!r.ok){ const e=await _readApiError(r); throw Error('listar gists: HTTP '+e.status+(e.msg?' — '+e.msg:'')); }
             const list=await r.json(); if(!list.length) return null;
             for(const g of list){ if(g.description==='Caderno Estudos TOTAL' && g.files && g.files['estudos.json']) return g.id; }
             page++;
@@ -438,7 +451,7 @@ const gist = {
         if(!appData.gistId) return null;
         const r=await fetch('https://api.github.com/gists/'+appData.gistId,{headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github+json'}});
         if(r.status===404){ appData.gistId=''; persistNow(); return {notfound:true}; }
-        if(!r.ok) throw Error('HTTP '+r.status);
+        if(!r.ok){ const e=await _readApiError(r); throw Error('ler gist: HTTP '+r.status+(e.msg?' — '+e.msg:'')); }
         const d=await r.json(); return {updated_at:d.updated_at, content:d.files['estudos.json']?.content||null};
     },
     _setStatus(state, msg){
@@ -447,6 +460,7 @@ const gist = {
     },
     async syncNow(force){
         if(!appData.gistToken) return;
+        if(Date.now()<gistNextAttempt) return;
         if(gistBusy){ gistQueue=true; return; }
         gistBusy=true;
         gistEnsure();
@@ -456,7 +470,7 @@ const gist = {
             if(!appData.gistId){
                 const pl=this._buildPayload();
                 const r=await fetch('https://api.github.com/gists',{method:'POST',headers:{'Authorization':'token '+appData.gistToken,'Content-Type':'application/json','Accept':'application/vnd.github+json'},body:JSON.stringify({description:'Caderno Estudos TOTAL',public:false,files:{'estudos.json':{content:pl}}})});
-                if(!r.ok) throw Error('HTTP '+r.status);
+                if(!r.ok){ const e=await _readApiError(r); throw Error('criar gist: HTTP '+r.status+(e.msg?' — '+e.msg:'')); }
                 const d=await r.json(); appData.gistId=d.id; appData.gistLastSync=d.updated_at; persistNow();
                 this._setStatus('ok','✅ Conectado'); this.updateUI();
                 Toast.show('Gist criado e sincronizado!','success'); return;
@@ -488,7 +502,8 @@ const gist = {
             }
             this._setStatus('ok','🔄 Sincronizado'); this.updateUI();
         }catch(e){
-            this._setStatus('err','⚠️ Erro de sincronização: '+(e.message||e));
+            const msg=(e&&e.message)?e.message:String(e);
+            this._setStatus('err','⚠️ Erro: '+msg);
             console.error('Sync:',e);
         }finally{
             gistBusy=false;
@@ -516,7 +531,7 @@ const gist = {
     async _patch(payload){
         const r=await fetch('https://api.github.com/gists/'+appData.gistId,{method:'PATCH',headers:{'Authorization':'token '+appData.gistToken,'Content-Type':'application/json','Accept':'application/vnd.github+json'},body:JSON.stringify({files:{'estudos.json':{content:payload}}})});
         if(r.status===404){ appData.gistId=''; return this.syncNow(false); }
-        if(!r.ok) throw Error('HTTP '+r.status);
+        if(!r.ok){ const e=await _readApiError(r); throw Error('enviar: HTTP '+r.status+(e.msg?' — '+e.msg:'')); }
         const d=await r.json(); appData.gistLastSync=d.updated_at; persistNow();
         document.getElementById('gistIcon').textContent='✓';
     },
