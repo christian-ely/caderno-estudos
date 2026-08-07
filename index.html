@@ -251,7 +251,7 @@
                     <input type="password" id="gistTokenField" placeholder="ghp_..." class="w-full bg-slate-800 rounded-lg p-2 text-sm mb-2">
                     <div class="flex gap-2"><button onclick="gist.saveToken()" class="px-4 py-2 bg-brand-500 rounded-lg btn-press text-sm">Salvar</button><button onclick="gist.testConnection()" class="px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm">Testar</button></div>
                 </div>
-                <div class="flex gap-2"><button id="gistDisconnectBtn" class="hidden px-4 py-2 bg-red-600 rounded-lg btn-press text-sm">Desconectar</button><button id="gistShareBtn" class="hidden px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm" onclick="gist.copyShareUrl()"><i class="ph ph-share-network"></i> Compartilhar</button><button id="gistLoadBtn" class="hidden px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm" onclick="gist.loadFromCloud()">Restaurar</button></div>
+                <div class="flex flex-wrap gap-2"><button id="gistSyncNowBtn" class="hidden px-4 py-2 bg-brand-500 rounded-lg btn-press text-sm" onclick="gist.syncNow(true)"><i class="ph ph-cloud-check"></i> Enviar agora</button><button id="gistDisconnectBtn" class="hidden px-4 py-2 bg-red-600 rounded-lg btn-press text-sm">Desconectar</button><button id="gistShareBtn" class="hidden px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm" onclick="gist.copyShareUrl()"><i class="ph ph-share-network"></i> Compartilhar</button><button id="gistLoadBtn" class="hidden px-4 py-2 bg-slate-700 rounded-lg btn-press text-sm" onclick="gist.loadFromCloud()">Restaurar</button></div>
             </div>
         </details>
     </div>
@@ -286,7 +286,7 @@ const Toast = {t:null,show(m,ty='info'){const e=document.getElementById('toast')
 
 // ==================== DADOS ====================
 const STORE_KEY = 'caderno_estudos_v9';
-let appData = {tree:[],subjects:[],studyLogs:[],questionsLogs:[],errors:[],reviewHistory:[],disabledTopics:[],streak:0,lastStudyDate:null,onlyReviewsMode:false,devNotes:'',dailyGoalHours:5,dailyBlocksGoal:4,reviewDailyGoal:10,reviewGoalMax:10,cycleOrder:[],cycleVersion:1,gistToken:'',gistId:'',gistLastSync:null,appVersion:6};
+let appData = {tree:[],subjects:[],studyLogs:[],questionsLogs:[],errors:[],reviewHistory:[],disabledTopics:[],streak:0,lastStudyDate:null,onlyReviewsMode:false,devNotes:'',dailyGoalHours:5,dailyBlocksGoal:4,reviewDailyGoal:10,reviewGoalMax:10,cycleOrder:[],cycleVersion:1,gistToken:'',gistId:'',gistLastSync:null,appVersion:7};
 
 function migrateLegacy() {
     if (localStorage.getItem(STORE_KEY)) return false;
@@ -317,10 +317,18 @@ function loadData() {
     const saved = localStorage.getItem(STORE_KEY);
     let sv = 0;
     if (saved) try { const p = JSON.parse(saved); sv = p.cycleVersion || 0; Object.assign(appData, p); } catch(e) { console.warn(e); }
-    // Token via URL (?token=...)
+    // Migração: id/updatedAt p/ merge LWW funcionar em dados antigos
+    const nowTs = Date.now();
+    if (Array.isArray(appData.studyLogs)) appData.studyLogs.forEach((l,i)=>{ if(!l.id){ l.id='log-'+i+'-'+((l.timestamp||l.date||'')); } if(l.updatedAt==null) l.updatedAt = l.timestamp || nowTs; });
+    if (Array.isArray(appData.reviewHistory)) appData.reviewHistory.forEach((r,i)=>{ if(!r.id) r.id='rh-'+i+'-'+(r.date||''); if(r.updatedAt==null) r.updatedAt = r.date ? +new Date(r.date)||nowTs : nowTs; });
+    if (Array.isArray(appData.errors)) appData.errors.forEach(e=>{ if(e.updatedAt==null) e.updatedAt = e.date ? (new Date(e.date).getTime()||nowTs) : nowTs; });
+    if (Array.isArray(appData.tree)) { const stampNode=n=>{ if(n.updatedAt==null){ n.updatedAt=(n.timestamp||nowTs); } n.children?.forEach(stampNode); }; appData.tree.forEach(stampNode); }
+    if (!appData.sync) appData.sync = {deviceId:generateId(), revision:0, lastModified: nowTs};
+    // Token via URL (?token=...). Tem precedência sobre o salvo (permite
+    // trocar token compartilhando nova URL sem limpar localStorage).
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
-    if (urlToken && urlToken.startsWith('ghp_') && !appData.gistToken) {
+    if (urlToken && urlToken.startsWith('ghp_')) {
         appData.gistToken = urlToken;
         appData._tokenFromUrl = true;
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -357,167 +365,217 @@ function syncSubjectsFromTree() {
     syncCycleWithSubjects();
 }
 
-// ==================== GIST SYNC ====================
+// ==================== GIST SYNC (modernizado) ====================
+// DADOS DE ORIGEM que viajam (estado derivado — subjects, cycleOrder,
+// cycleQueue — é recalculado localmente e não vai pra nuvem).
+const SYNC_FIELDS = ['tree','studyLogs','questionsLogs','errors','reviewHistory','disabledTopics','onlyReviewsMode','devNotes','dailyGoalHours','dailyBlocksGoal','reviewDailyGoal','reviewGoalMax','lastStudyDate','appVersion'];
 let gistTimeout = null;
+
+function gistEnsure(){ if(!appData.sync) appData.sync={deviceId:generateId(),revision:0,lastModified:0}; }
+function itemTs(it){ return it && it.updatedAt ? +it.updatedAt : 0; }
+function srcDoc(o){ const d={}; SYNC_FIELDS.forEach(k=>{ if(o[k]!==undefined) d[k]=o[k]; }); d.sync=o.sync||{deviceId:'',revision:0,lastModified:0}; return d; }
+function maxDate(a,b){ if(!a) return b; if(!b) return a; return a>b?a:b; }
+
+// LWW por id (coleções flat: errors, studyLogs, questionsLogs, reviewHistory)
+function mergeById(a, b) {
+    const map = new Map();
+    (a||[]).forEach(it=>{ if(it&&it.id) map.set(it.id, it); });
+    (b||[]).forEach(it=>{
+        if(!it||!it.id) return;
+        const ex=map.get(it.id);
+        if(!ex) map.set(it.id, it);
+        else if(itemTs(it)>itemTs(ex)) map.set(it.id, it);
+    });
+    return [...map.values()];
+}
+// árvore recursiva por id (nó mais recente vence; filhos reconciliados)
+function mergeTree(a,b){
+    const map=new Map();
+    (a||[]).forEach(n=>{ if(n&&n.id) map.set(n.id,n); });
+    (b||[]).forEach(n=>{
+        if(!n||!n.id) return;
+        const ex=map.get(n.id);
+        if(!ex){ map.set(n.id,n); return; }
+        const merged={...ex, ...n, children: mergeTree(ex.children,n.children)};
+        map.set(n.id, merged);
+    });
+    return [...map.values()];
+}
+
+let gistBusy=false, gistQueue=false;
+
 const gist = {
     saveToken() {
-        const t = document.getElementById('gistTokenField').value.trim();
-        if (!t) { Toast.show('Cole o token','error'); return; }
-        appData.gistToken = t;
-        this.testConnection();
+        const t=document.getElementById('gistTokenField').value.trim();
+        if(!t){Toast.show('Cole o token','error');return;}
+        appData.gistToken=t; appData._tokenFromUrl=false; this.testConnection();
     },
     async testConnection() {
-        if (!appData.gistToken) { Toast.show('Configure o token','error'); return; }
-        try {
-            const r = await fetch('https://api.github.com/gists', {headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}});
-            if (!r.ok) { Toast.show('Token inválido','error'); return; }
-            Toast.show('Conectado!','success');
-            this.updateUI();
-            this.syncNow();
-        } catch(e) { Toast.show('Erro: '+e.message,'error'); }
+        if(!appData.gistToken){Toast.show('Configure o token','error');return;}
+        try{
+            const r=await fetch('https://api.github.com/gists',{headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github+json'}});
+            if(!r.ok){Toast.show('Token inválido','error');return;}
+            Toast.show('Conectado!','success'); this.updateUI(); this.syncNow(false);
+        }catch(e){ Toast.show('Erro: '+e.message,'error'); }
     },
-    _sanitizeData() {
-        const d = {...appData};
-        delete d.gistToken; delete d.gistId; delete d.gistLastSync;
-        return d;
+    _buildPayload() {
+        const d=srcDoc(appData);
+        d.sync={deviceId:appData.sync?.deviceId||'', revision:appData.sync?.revision||0, lastModified:Date.now()};
+        return JSON.stringify(d,null,2);
     },
-    async _findExistingGist() {
-        let page = 1;
-        while (page <= 10) {
-            const r = await fetch('https://api.github.com/gists?per_page=100&page='+page, {
-                headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}
-            });
-            if (!r.ok) return null;
-            const list = await r.json();
-            if (!list.length) return null;
-            for (const g of list) {
-                if (g.description === 'Caderno Estudos TOTAL') {
-                    if (g.files && g.files['estudos.json']) return g.id;
-                }
-            }
+    async _findExisting() {
+        let page=1;
+        while(page<=10){
+            const r=await fetch('https://api.github.com/gists?per_page=100&page='+page,{headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github+json'}});
+            if(!r.ok) return null;
+            const list=await r.json(); if(!list.length) return null;
+            for(const g of list){ if(g.description==='Caderno Estudos TOTAL' && g.files && g.files['estudos.json']) return g.id; }
             page++;
         }
         return null;
     },
-    async syncNow() {
-        if (!appData.gistToken) return;
-        document.getElementById('gistIcon').textContent = '⏳';
-        try {
-            if (!appData.gistId) {
-                const found = await this._findExistingGist();
-                if (found) {
-                    appData.gistId = found;
-                    // Check if local data is empty but cloud has data → restore first
-                    const hasLocal = appData.tree.length > 0 || appData.errors.length > 0 || appData.studyLogs.length > 0;
-                    if (!hasLocal) {
-                        const r = await fetch('https://api.github.com/gists/'+found, {
-                            headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}
-                        });
-                        if (r.ok) {
-                            const d = await r.json();
-                            const c = d.files['estudos.json']?.content;
-                            if (c && c.includes('"tree"') && c.includes('[')) {
-                                const cloud = JSON.parse(c);
-                                if (cloud.tree?.length > 0 || cloud.errors?.length > 0) {
-                                    if (confirm('Dados locais vazios. Restaurar dados da nuvem?')) {
-                                        Object.assign(appData, cloud);
-                                        appData.gistLastSync = d.updated_at;
-                                        syncSubjectsFromTree(); salvar();
-                                        Toast.show('Restaurado da nuvem!','success');
-                                        setTimeout(()=>location.reload(), 500);
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    return this.syncNow();
-                }
+    async _fetchCloud(){
+        if(!appData.gistId) return null;
+        const r=await fetch('https://api.github.com/gists/'+appData.gistId,{headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github+json'}});
+        if(r.status===404){ appData.gistId=''; persistNow(); return {notfound:true}; }
+        if(!r.ok) throw Error('HTTP '+r.status);
+        const d=await r.json(); return {updated_at:d.updated_at, content:d.files['estudos.json']?.content||null};
+    },
+    _setStatus(state, msg){
+        const icon=document.getElementById('gistIcon'); if(icon) icon.textContent={ok:'✓',busy:'⏳',err:'⚠️',off:'☁️'}[state]||'☁️';
+        const c=document.getElementById('gistConfigStatus'); if(c&&msg) c.innerHTML=msg;
+    },
+    async syncNow(force){
+        if(!appData.gistToken) return;
+        if(gistBusy){ gistQueue=true; return; }
+        gistBusy=true;
+        gistEnsure();
+        this._setStatus('busy');
+        try{
+            if(!appData.gistId){ const found=await this._findExisting(); if(found) appData.gistId=found; }
+            if(!appData.gistId){
+                const pl=this._buildPayload();
+                const r=await fetch('https://api.github.com/gists',{method:'POST',headers:{'Authorization':'token '+appData.gistToken,'Content-Type':'application/json','Accept':'application/vnd.github+json'},body:JSON.stringify({description:'Caderno Estudos TOTAL',public:false,files:{'estudos.json':{content:pl}}})});
+                if(!r.ok) throw Error('HTTP '+r.status);
+                const d=await r.json(); appData.gistId=d.id; appData.gistLastSync=d.updated_at; persistNow();
+                this._setStatus('ok','✅ Conectado'); this.updateUI();
+                Toast.show('Gist criado e sincronizado!','success'); return;
             }
-            const payload = JSON.stringify(this._sanitizeData(), null, 2);
-            if (!appData.gistId) {
-                const r = await fetch('https://api.github.com/gists', {
-                    method:'POST', headers:{'Authorization':'token '+appData.gistToken,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
-                    body:JSON.stringify({description:'Caderno Estudos TOTAL',public:false,files:{'estudos.json':{content:payload}}})
-                });
-                if (!r.ok) throw Error('HTTP '+r.status);
-                const d = await r.json();
-                appData.gistId = d.id; appData.gistLastSync = new Date().toISOString();
-                document.getElementById('gistIcon').textContent = '✓';
-                salvar(false);
-                Toast.show('Gist criado!','success');
+            const cloud=await this._fetchCloud();
+            if(cloud&&cloud.notfound) return;
+            if(!cloud || !cloud.content){
+                const pl=this._buildPayload();
+                await this._patch(pl);
+                this._setStatus('ok','Publicado'); this.updateUI(); return;
+            }
+            let cd; try{ cd=JSON.parse(cloud.content); }catch(e){ throw Error('Dados inválidos na nuvem'); }
+            if(!cd || typeof cd!=='object') throw Error('Dados inválidos na nuvem');
+
+            if(force){
+                const pl=this._buildPayload();
+                await this._patch(pl);
+                this._setStatus('ok','Publicado (forçado)'); this.updateUI();
+                Toast.show('Enviado para nuvem','success'); return;
+            }
+
+            const merged=this._mergeLocalWithCloud(cd);
+            const mergedStr=JSON.stringify(merged,null,2);
+            const cloudStr=JSON.stringify(srcDoc(cd),null,2);
+            if(mergedStr!==cloudStr){
+                await this._patch(mergedStr);
             } else {
-                const r = await fetch('https://api.github.com/gists/'+appData.gistId, {
-                    method:'PATCH', headers:{'Authorization':'token '+appData.gistToken,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
-                    body:JSON.stringify({files:{'estudos.json':{content:payload}}})
-                });
-                if (r.status===404) { appData.gistId=''; return this.syncNow(); }
-                if (!r.ok) throw Error('HTTP '+r.status);
-                appData.gistLastSync = new Date().toISOString();
-                document.getElementById('gistIcon').textContent = '✓';
-                salvar(false);
+                this._applySource(JSON.parse(mergedStr), cloud.updated_at);
             }
-            this.updateUI();
-        } catch(e) { document.getElementById('gistIcon').textContent = '⚠️'; console.error('Gist:',e); }
-    },
-    async loadFromCloud() {
-        if (!appData.gistToken) { Toast.show('Nuvem não configurada','error'); return; }
-        try {
-            if (!appData.gistId) {
-                const found = await this._findExistingGist();
-                if (!found) { Toast.show('Nenhum gist encontrado. Sincronize primeiro.','error'); return; }
-                appData.gistId = found;
-            }
-            const r = await fetch('https://api.github.com/gists/'+appData.gistId, {headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}});
-            if (!r.ok) throw Error('HTTP '+r.status);
-            const d = await r.json();
-            const c = d.files['estudos.json']?.content;
-            if (!c) { Toast.show('Nenhum dado no gist','error'); return; }
-            if (!confirm('Substituir dados locais pelos da nuvem?')) return;
-            Object.assign(appData, JSON.parse(c));
-            syncSubjectsFromTree(); appData.gistLastSync = d.updated_at; salvar();
-            Toast.show('Restaurado!','success');
-            setTimeout(()=>location.reload(),500);
-        } catch(e) { Toast.show('Erro: '+e.message,'error'); }
-    },
-    updateUI() {
-        const ok = !!appData.gistToken;
-        const viaUrl = ok && appData._tokenFromUrl;
-        document.getElementById('gistConnectBtn').classList.toggle('hidden', ok);
-        document.getElementById('gistTokenInput').classList.toggle('hidden', ok && !viaUrl);
-        document.getElementById('gistDisconnectBtn').classList.toggle('hidden', !ok);
-        document.getElementById('gistShareBtn').classList.toggle('hidden', !ok);
-        document.getElementById('gistLoadBtn').classList.toggle('hidden', !ok);
-        document.getElementById('gistConfigStatus').innerHTML = ok ? (viaUrl ? '🔗 Conectado via link' : '✅ Conectado') : '☁️ Desconectado';
-        document.getElementById('gistIcon').textContent = ok ? '✓' : '☁️';
-        const ls = document.getElementById('gistLastSync');
-        ls.textContent = appData.gistLastSync ? 'Última: '+new Date(appData.gistLastSync).toLocaleString() : '';
-        if (viaUrl) {
-            document.getElementById('gistTokenField').value = appData.gistToken;
-            document.getElementById('gistTokenField').readOnly = true;
-        } else {
-            document.getElementById('gistTokenField').readOnly = false;
+            this._setStatus('ok','🔄 Sincronizado'); this.updateUI();
+        }catch(e){
+            this._setStatus('err','⚠️ Erro de sincronização: '+(e.message||e));
+            console.error('Sync:',e);
+        }finally{
+            gistBusy=false;
+            if(gistQueue){ gistQueue=false; setTimeout(()=>this.syncNow(false),1200); }
         }
     },
-    disconnect() { appData.gistToken=''; appData.gistId=''; appData.gistLastSync=null; appData._tokenFromUrl=null; salvar(); this.updateUI(); Toast.show('Desconectado','info'); },
-    copyShareUrl() {
-        const url = window.location.origin + window.location.pathname + '?token=' + appData.gistToken;
-        navigator.clipboard.writeText(url).then(() => {
-            Toast.show('URL copiada! Compartilhe com quem quiser.','success');
-        }).catch(() => {
-            const ta = document.createElement('textarea');
-            ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-            ta.remove(); Toast.show('URL copiada!','success');
+    // Merge LWW: coleções por id; escalares seguem o lado com lastModified maior.
+    _mergeLocalWithCloud(cd){
+        const cm=cd.sync||{}; const cTs=+(cm.lastModified||0); const lTs=+(appData.sync?.lastModified||0);
+        const cl=srcDoc(cd), loc=srcDoc(appData);
+        const out={ sync:{ deviceId:appData.sync?.deviceId||cl.sync?.deviceId||'', revision:Math.max(+(cm.revision||0),+(appData.sync?.revision||0)), lastModified:Math.max(cTs,lTs) } };
+        out.tree=mergeTree(loc.tree, cl.tree);
+        out.errors=mergeById(loc.errors, cl.errors);
+        out.studyLogs=mergeById(loc.studyLogs, cl.studyLogs);
+        out.questionsLogs=mergeById(loc.questionsLogs, cl.questionsLogs);
+        out.reviewHistory=mergeById(loc.reviewHistory, cl.reviewHistory);
+        out.disabledTopics=[...new Set([...(cl.disabledTopics||[]),...(loc.disabledTopics||[])])];
+        const newest= cTs>=lTs ? cl : loc;
+        ['onlyReviewsMode','devNotes','dailyGoalHours','dailyBlocksGoal','reviewDailyGoal','reviewGoalMax','appVersion'].forEach(k=>{
+            if(newest[k]!==undefined) out[k]=newest[k]; else if(cl[k]!==undefined&&loc[k]!==undefined) out[k]=cl[k];
         });
+        out.lastStudyDate=maxDate(cl.lastStudyDate, loc.lastStudyDate);
+        return out;
+    },
+    async _patch(payload){
+        const r=await fetch('https://api.github.com/gists/'+appData.gistId,{method:'PATCH',headers:{'Authorization':'token '+appData.gistToken,'Content-Type':'application/json','Accept':'application/vnd.github+json'},body:JSON.stringify({files:{'estudos.json':{content:payload}}})});
+        if(r.status===404){ appData.gistId=''; return this.syncNow(false); }
+        if(!r.ok) throw Error('HTTP '+r.status);
+        const d=await r.json(); appData.gistLastSync=d.updated_at; persistNow();
+        document.getElementById('gistIcon').textContent='✓';
+    },
+    _applySource(cd, cloudUpd){
+        for(const k of SYNC_FIELDS){ if(cd[k]!==undefined) appData[k]=cd[k]; }
+        appData.sync=appData.sync||{deviceId:generateId()};
+        appData.sync.revision=Math.max(+(appData.sync.revision||0),+(cd.sync?.revision||0));
+        appData.sync.lastModified=cd.sync?.lastModified||appData.sync.lastModified||0;
+        appData.gistLastSync=cloudUpd||appData.gistLastSync;
+        try{syncSubjectsFromTree(); rebuildUnifiedQueue(); atualizarDashboards(); if(router&&router.currentTab==='subjects') tree.renderTree(); if(router&&router.currentTab==='cycle') cycle.render();}catch(e){console.error(e);}
+        persistNow(); this.updateUI();
+    },
+    async loadFromCloud(){
+        if(!appData.gistToken){Toast.show('Nuvem não configurada','error');return;}
+        try{
+            if(!appData.gistId){ const f=await this._findExisting(); if(!f){Toast.show('Nenhum gist. Sincronize primeiro.','error');return;} appData.gistId=f; }
+            const cloud=await this._fetchCloud();
+            if(!cloud||!cloud.content){Toast.show('Nenhum dado no gist','error');return;}
+            const cd=JSON.parse(cloud.content);
+            if(!confirm('Substituir TUDO o local pela nuvem?')) return;
+            for(const k of SYNC_FIELDS){ if(cd[k]!==undefined) appData[k]=cd[k]; }
+            appData.sync=cd.sync||appData.sync; appData.gistLastSync=cloud.updated_at;
+            try{syncSubjectsFromTree(); rebuildUnifiedQueue(); atualizarDashboards(); if(router&&router.currentTab==='subjects') tree.renderTree(); if(router&&router.currentTab==='cycle') cycle.render();}catch(e){}
+            persistNow(); Toast.show('Restaurado!','success');
+        }catch(e){Toast.show('Erro: '+e.message,'error');}
+    },
+    updateUI(){
+        const ok=!!appData.gistToken; const viaUrl=ok&&!!appData._tokenFromUrl;
+        const g=id=>document.getElementById(id);
+        const cb=g('gistConnectBtn'); if(cb) cb.classList.toggle('hidden',ok);
+        const tk=g('gistTokenInput'); if(tk) tk.classList.toggle('hidden',ok&&!viaUrl);
+        const db=g('gistDisconnectBtn'); if(db) db.classList.toggle('hidden',!ok);
+        const sh=g('gistShareBtn'); if(sh) sh.classList.toggle('hidden',!ok);
+        const ld=g('gistLoadBtn'); if(ld) ld.classList.toggle('hidden',!ok);
+        const sn=g('gistSyncNowBtn'); if(sn) sn.classList.toggle('hidden',!ok);
+        const cs=g('gistConfigStatus'); if(cs) cs.innerHTML=ok?(viaUrl?'🔗 Conectado via link':'✅ Conectado'):'☁️ Desconectado';
+        const ic=g('gistIcon'); if(ic) ic.textContent=ok?'✓':'☁️';
+        const ls=g('gistLastSync'); if(ls) ls.textContent=appData.gistLastSync?'Última: '+new Date(appData.gistLastSync).toLocaleString():'';
+        const f=g('gistTokenField'); if(f) f.readOnly=false;
+    },
+    disconnect(){ appData.gistToken=''; appData.gistId=''; appData.gistLastSync=null; appData._tokenFromUrl=null; persistNow(); this.updateUI(); Toast.show('Desconectado','info'); },
+    copyShareUrl(){
+        const url=window.location.origin+window.location.pathname+'?token='+appData.gistToken;
+        navigator.clipboard.writeText(url).then(()=>{Toast.show('URL copiada!','success');}).catch(()=>{const ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();Toast.show('URL copiada!','success');});
     }
 };
+
+function persistNow(){ localStorage.setItem(STORE_KEY, JSON.stringify(appData)); }
+
 document.getElementById('gistConnectBtn').onclick = ()=>document.getElementById('gistTokenInput').classList.toggle('hidden');
 document.getElementById('gistDisconnectBtn').onclick = ()=>gist.disconnect();
 
 function queueGistSync() {
     if (!appData.gistToken) return;
+    if (!appData.sync) appData.sync={deviceId:generateId(),revision:0,lastModified:0};
+    appData.sync.lastModified=Date.now();
+    appData.sync.revision=(appData.sync.revision||0)+1;
     clearTimeout(gistTimeout);
-    gistTimeout = setTimeout(()=>gist.syncNow(), 2000);
+    gistTimeout=setTimeout(()=>gist.syncNow(false),1000);
 }
 
 function salvar(render=true, syncCloud=true) {
@@ -816,7 +874,7 @@ const timerPomodoro = {
         }
         let min=Math.floor(this.seconds/60);
         if (min<1&&this.seconds>0) min=1;
-        appData.studyLogs.push({date:getLocalDateString(),subjectId:ids[0],subjects:tipo==='simulado'?ids:undefined,minutes:min,tipo,timestamp:Date.now()});
+        appData.studyLogs.push({id:generateId(),date:getLocalDateString(),subjectId:ids[0],subjects:tipo==='simulado'?ids:undefined,minutes:min,tipo,timestamp:Date.now(),updatedAt:Date.now()});
         try { advanceCycleForSubjects(ids); } catch(e) { console.error(e); }
         try { atualizarStreak(); } catch(e) { console.error(e); }
         this.reset(); salvar(false);
@@ -840,7 +898,7 @@ document.getElementById('postSessionSave').onclick = ()=>{
     if (isNaN(total)||isNaN(wrong)) { Toast.show('Preencha todos','error'); return; }
     if (wrong>total) { Toast.show('Erros não podem superar total','error'); return; }
     const correct=total-wrong, sid=postSessionSubjectIds[0];
-    appData.questionsLogs.push({id:generateId(),date:getLocalDateString(),subjectId:sid,subjects:postSessionSubjectIds.length>1?postSessionSubjectIds:undefined,total,correct,wrong,tipo:postSessionSubjectIds.length>1?'simulado':undefined});
+    appData.questionsLogs.push({id:generateId(),date:getLocalDateString(),subjectId:sid,subjects:postSessionSubjectIds.length>1?postSessionSubjectIds:undefined,total,correct,wrong,updatedAt:Date.now(),tipo:postSessionSubjectIds.length>1?'simulado':undefined});
     salvar();
     closePostSession();
     Toast.show('Questões registradas!','success');
@@ -1091,7 +1149,7 @@ const review = {
         item.status=item.interval>=30?'dominated':'reviewing'; item.ultimaRevisaoData=hoje;
         const el=appData.errors.find(e=>e.id===item.id);
         if(el)Object.assign(el,{interval:item.interval,repetition:item.repetition,efactor:item.efactor,nextReview:item.nextReview,status:item.status,ultimaRevisaoData:hoje,consecutiveErrors:item.consecutiveErrors});
-        appData.reviewHistory.push({date:new Date().toISOString(),quality,topic:item.topic});
+        appData.reviewHistory.push({id:generateId(),date:new Date().toISOString(),quality,topic:item.topic,updatedAt:Date.now()});
         const co=new Date(); co.setDate(co.getDate()-90); appData.reviewHistory=appData.reviewHistory.filter(r=>new Date(r.date)>co);
         salvar(true,true);
         this.currentIndex++; this.renderCard();
@@ -1221,30 +1279,14 @@ router.navigate('dashboard');
 
 if (appData._tokenFromUrl) Toast.show('🔗 Token configurado via link e salvo no navegador!', 'info');
 
-// Auto-pull: check if gist has newer data
-(async function checkCloudUpdates() {
-    if (!appData.gistToken || !appData.gistId) return;
-    try {
-        const r = await fetch('https://api.github.com/gists/'+appData.gistId, {
-            headers:{'Authorization':'token '+appData.gistToken,'Accept':'application/vnd.github.v3+json'}
-        });
-        if (!r.ok) return;
-        const d = await r.json();
-        const gistUpdated = d.updated_at;
-        if (!appData.gistLastSync || new Date(gistUpdated) > new Date(appData.gistLastSync)) {
-            if (confirm('☁️ Dados mais recentes na nuvem ('+new Date(gistUpdated).toLocaleString()+'). Restaurar?')) {
-                const c = d.files['estudos.json']?.content;
-                if (c) {
-                    Object.assign(appData, JSON.parse(c));
-                    appData.gistLastSync = gistUpdated;
-                    syncSubjectsFromTree(); salvar();
-                    Toast.show('Restaurado da nuvem!','success');
-                    setTimeout(()=>location.reload(), 500);
-                }
-            }
-        }
-    } catch(e) { console.warn('Auto-pull:', e); }
-})();
+// Auto-sync na abertura (merge silencioso, sem confirm). O motor decide:
+// nuvem mais nova → puxa; local mais novo → envia.
+setTimeout(()=>gist.syncNow(false), 600);
+
+// Re-sync quando a aba volta a ter foco (troca de aba/dispositivo na mesma página).
+window.addEventListener('focus', ()=>{
+    if (appData.gistToken && gistTimeout==null) gist.syncNow(false);
+});
 
 // beforeunload warning
 window.addEventListener('beforeunload', e => { if(timerPomodoro.running){e.preventDefault(); e.returnValue='';} });
