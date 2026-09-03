@@ -5,10 +5,18 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📚%3C/text%3E%3C/svg%3E">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Caderno Estudos TOTAL</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap">
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <meta name="theme-color" content="#0ea5e9">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="./icons/icon-192.png">
+    <link rel="stylesheet" href="./vendor/satoshi-local.css">
+    <link rel="stylesheet" href="./vendor/phosphor/regular.css">
+    <link rel="stylesheet" href="./vendor/phosphor/bold.css">
+    <link rel="stylesheet" href="./vendor/phosphor/fill.css">
+    <script src="./vendor/tailwind-cdn.js"></script>
+    <script src="./vendor/chart.umd.min.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -142,7 +150,7 @@
 <!-- MATÉRIAS -->
 <section id="view-subjects" class="view-section hidden fade-in"><div class="glass rounded-2xl p-6 full-min-height"><h2 class="text-xl font-bold mb-4"><i class="ph ph-diagram-tree text-brand-400"></i> Edital — Árvore de Estudos</h2><div id="treeContainer" class="space-y-2 flex-1 overflow-y-auto pr-2"></div><div class="mt-6 flex gap-3 flex-wrap"><button onclick="tree.showAddRootModal()" class="px-3 py-1.5 bg-brand-500/20 text-brand-400 rounded-lg btn-press"><i class="ph ph-plus"></i> Adicionar raiz</button><button onclick="tree.collapseAll()" class="px-3 py-1.5 bg-slate-700 rounded-lg btn-press">Recolher</button><button onclick="tree.expandAll()" class="px-3 py-1.5 bg-slate-700 rounded-lg btn-press">Expandir</button></div></div></section>
 
-<!-- ERROS -->
+<!--  -->
 <section id="view-errors" class="view-section hidden fade-in">
     <div class="glass rounded-2xl p-6"><h2 class="text-xl font-bold mb-4"><i class="ph ph-note-pencil text-brand-400"></i> Cadastro de Erros</h2>
         <form id="errorForm" class="space-y-4"><input type="hidden" id="editId">
@@ -460,6 +468,12 @@ const gist = {
     },
     async syncNow(force){
         if(!appData.gistToken) return;
+        // Bug1: offline não é erro — só marca pendência e sai
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            appData._gistPending = true; persistNow();
+            this._setStatus('off','☁️ Offline — salvo local, envia ao voltar');
+            return;
+        }
         if(Date.now()<gistNextAttempt) return;
         if(gistBusy){ gistQueue=true; return; }
         gistBusy=true;
@@ -534,6 +548,12 @@ const gist = {
         if(!r.ok){ const e=await _readApiError(r); throw Error('enviar: HTTP '+r.status+(e.msg?' — '+e.msg:'')); }
         const d=await r.json(); appData.gistLastSync=d.updated_at; persistNow();
         document.getElementById('gistIcon').textContent='✓';
+        // Bug2: push concluído — limpa pendência, avisa e atualiza UI/indicador
+        if (appData._gistPending) {
+            appData._gistPending = false; persistNow();
+            Toast.show('Fila offline sincronizada','success');
+        }
+        this._setStatus('ok','🔄 Sincronizado'); this.updateUI();
     },
     _applySource(cd, cloudUpd){
         for(const k of SYNC_FIELDS){ if(cd[k]!==undefined) appData[k]=cd[k]; }
@@ -541,8 +561,20 @@ const gist = {
         appData.sync.revision=Math.max(+(appData.sync.revision||0),+(cd.sync?.revision||0));
         appData.sync.lastModified=cd.sync?.lastModified||appData.sync.lastModified||0;
         appData.gistLastSync=cloudUpd||appData.gistLastSync;
-        try{syncSubjectsFromTree(); rebuildUnifiedQueue(); atualizarDashboards(); if(router&&router.currentTab==='subjects') tree.renderTree(); if(router&&router.currentTab==='cycle') cycle.render();}catch(e){console.error(e);}
-        persistNow(); this.updateUI();
+        // Bug2: pull/merge concluído — re-render completo da aba atual, sem tela stale
+        try{
+            syncSubjectsFromTree(); rebuildUnifiedQueue(); atualizarDashboards();
+            if(router&&router.currentTab==='subjects') tree.renderTree();
+            if(router&&router.currentTab==='cycle') cycle.render();
+            if(router&&router.currentTab==='errors'&&typeof errorsView!=='undefined') errorsView.render();
+            if(router&&router.currentTab==='timer'){ try{atualizarSelectTimer(true);}catch(e){} }
+        }catch(e){console.error(e);}
+        // Bug2: só toasta quando havia pendência offline (evita ruído a cada save online)
+        if (appData._gistPending) {
+            appData._gistPending = false;
+            Toast.show('Fila offline sincronizada','success');
+        }
+        persistNow(); this._setStatus('ok','🔄 Sincronizado'); this.updateUI();
     },
     async loadFromCloud(){
         if(!appData.gistToken){Toast.show('Nuvem não configurada','error');return;}
@@ -568,7 +600,7 @@ const gist = {
         const ld=g('gistLoadBtn'); if(ld) ld.classList.toggle('hidden',!ok);
         const sn=g('gistSyncNowBtn'); if(sn) sn.classList.toggle('hidden',!ok);
         const cs=g('gistConfigStatus'); if(cs) cs.innerHTML=ok?(viaUrl?'🔗 Conectado via link':'✅ Conectado'):'☁️ Desconectado';
-        const ic=g('gistIcon'); if(ic) ic.textContent=ok?'✓':'☁️';
+        const ic=g('gistIcon'); if(ic) ic.textContent=!ok?'☁️':(appData._gistPending?'⏳':((typeof navigator!=='undefined'&&!navigator.onLine)?'☁️':'✓'));
         const ls=g('gistLastSync'); if(ls) ls.textContent=appData.gistLastSync?'Última: '+new Date(appData.gistLastSync).toLocaleString():'';
         const f=g('gistTokenField'); if(f) f.readOnly=false;
     },
@@ -589,8 +621,28 @@ function queueGistSync() {
     if (!appData.sync) appData.sync={deviceId:generateId(),revision:0,lastModified:0};
     appData.sync.lastModified=Date.now();
     appData.sync.revision=(appData.sync.revision||0)+1;
+    // Bug1: sem rede não agenda push — marca pendência visível e sai sem erro
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (!appData._gistPending) {
+            appData._gistPending = true;
+            persistNow();
+            gist._setStatus('off','☁️ Offline — salvo local, envia ao voltar');
+            Toast.show('Offline — salvo local, sincroniza ao voltar','info');
+        }
+        return;
+    }
     clearTimeout(gistTimeout);
-    gistTimeout=setTimeout(()=>gist.syncNow(false),1000);
+    gistTimeout=setTimeout(()=>{gistTimeout=null; gist.syncNow(false);},1000);
+}
+
+// Auto-sync ao voltar a rede (com limpeza correta do listener via flag única)
+if (typeof window !== 'undefined' && !window._gistOnlineHook) {
+    window._gistOnlineHook = true;
+    window.addEventListener('online', () => {
+        gist._setStatus('busy');
+        gist.syncNow(false);
+    });
+    window.addEventListener('offline', () => gist._setStatus('off','☁️ Offline — salvo local'));
 }
 
 function salvar(render=true, syncCloud=true) {
@@ -857,6 +909,23 @@ const cycle = {
 };
 
 // ==================== TIMER ====================
+// Beep 100% local via WebAudio (sem depender de actions.google.com — offline).
+function beepLocal(freq=880, durMs=180) {
+    try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        beepLocal._ctx = beepLocal._ctx || new AC();
+        const ctx = beepLocal._ctx;
+        if (ctx.state === 'suspended') ctx.resume().catch(()=>{});
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + durMs/1000);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + durMs/1000 + 0.05);
+    } catch(e) {}
+}
 let postSessionSubjectIds = [];
 const timerPomodoro = {
     seconds:0,interval:null,running:false,
@@ -870,7 +939,7 @@ const timerPomodoro = {
         document.getElementById('btnReset').classList.remove('hidden');
         document.getElementById('btnRegister').classList.remove('hidden');
         let last=-1;
-        this.interval=setInterval(()=>{this.seconds++; this.updateDisplay(); if (this.seconds%3000===0&&this.seconds>0&&last!==this.seconds) {last=this.seconds; try{new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg').play().catch(()=>{})}catch(e){}}},1000);
+        this.interval=setInterval(()=>{this.seconds++; this.updateDisplay(); if (this.seconds%3000===0&&this.seconds>0&&last!==this.seconds) {last=this.seconds; beepLocal();}},1000);
     },
     pause() { clearInterval(this.interval); this.running=false; document.getElementById('btnStart').classList.remove('hidden'); document.getElementById('btnPause').classList.add('hidden'); },
     reset() { this.pause(); this.seconds=0; this.updateDisplay(); document.getElementById('btnReset').classList.add('hidden'); document.getElementById('btnRegister').classList.add('hidden'); },
@@ -1322,6 +1391,21 @@ document.addEventListener('keydown', e => {
         else if (e.key==='3' && pos) { e.preventDefault(); review.rate(2); }
         else if (e.key==='e') { e.preventDefault(); review.editCurrent(); }
     }
+});
+
+// ==================== PWA / OFFLINE ====================
+// SW registrado com guarda única (evita duplo registro em reloads quentes)
+if ('serviceWorker' in navigator && !window._cadernoSW) {
+    window._cadernoSW = true;
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    });
+}
+// Aviso visual de rede (usa o Toast já existente, sem poluir a cada save)
+let _wasOnline = (typeof navigator === 'undefined') || navigator.onLine;
+window.addEventListener('offline', () => { _wasOnline = false; });
+window.addEventListener('online', () => {
+    if (!_wasOnline) { _wasOnline = true; Toast.show('Conexão de volta — sincronizando…','info'); }
 });
 </script>
 </body>
